@@ -1,0 +1,6 @@
+{
+  "aliases": {
+    "lune": "~/.lune/.typedefs/0.10.1/",
+    "frktest": "./src/tests/frktest/src"
+  }
+}

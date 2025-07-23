@@ -33,15 +33,17 @@ local function stub(name, ret)
 end
 
 local function invokeHandler(index)
-    return function(...)
-        local args = table.pack(...)
-        local fnIndex = table.remove(args, 1)
+    return function(fnIndex, ...)
         local sp = cfns.emscripten_stack_get_current()
         local e, stacktrace = "N/A", "N/A"
-        local success = xpcall(function() return TABLE_LIST[0].data[fnIndex](table.unpack(args)) end, function(a) e = a; stacktrace = debug.traceback() end)
+        local success = xpcall(
+            function(...) return TABLE_LIST[0].data[fnIndex](...) end,
+            function(a) e = a; stacktrace = debug.traceback() end,
+            ...	
+        )
         if (not success) then
             cfns._emscripten_stack_restore(sp)
-            assert(typeof(e) ~= "string", `{e}\n\ninvoke stacktrace:\n{stacktrace}`)
+            assert(e == LONGJMP_THROW_SIGN, `{e}\n\ninvoke stacktrace:\n{stacktrace}`)
             cfns.setThrew(1, 0)
         end
     end

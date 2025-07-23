@@ -1,7 +1,3 @@
---// self note as for 28/06/2024:
---// replace all ``rt_truncate_u32_f64`` calls with ``rt_truncate_f64``
---// since it's not defined (Wasynth bug)
-
 local rt = {
 	rem = {
 		i32 = rt_rem_i32,

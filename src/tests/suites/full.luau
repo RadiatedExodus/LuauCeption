@@ -5,7 +5,7 @@ local req = frktest.assert.require
 local msg = frktest.assert.msg
 
 test.suite("Full", function()
-    local Full = require("../../../build/Luau.LuauCeption.Full")
+    local Full = require("../../../output/Luau.LuauCeption.Full")
     for opt = 0, 2 do
         for dbg = 0, 2 do
             for typInf = 0, 2 do

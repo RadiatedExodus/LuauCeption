@@ -70,12 +70,9 @@
         "variant": "cpp"
     },
     "luau-lsp.sourcemap.enabled": false,
-    "luau-lsp.types.roblox": false,
-    "luau-lsp.require.mode": "relativeToFile",
-    "luau-lsp.require.directoryAliases": {
-        "@lune/": "~/.lune/.typedefs/0.8.5/",
-        "@frktest": "./src/tests/frktest/src/"
-    },
+    "luau-lsp.diagnostics.workspace": false,
+    "luau-lsp.platform.type": "standard",
+    "luau-lsp.completion.autocompleteEnd": true,
     "luau-lsp.ignoreGlobs": [
         "**/_Index/**",
         "src/tests/frktest/**",
@@ -83,5 +80,4 @@
         "utils/**",
         "snippets/**"
     ],
-    "luau-lsp.diagnostics.workspace": false,
 }

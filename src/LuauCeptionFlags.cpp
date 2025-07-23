@@ -2,7 +2,7 @@
 #include "Luau/Common.h"
 #include "Luau/ExperimentalFlags.h"
 
- extern "C" bool set_flag(std::string name, bool state)
+extern "C" bool set_flag(std::string name, bool state)
 {
     for (Luau::FValue<bool>* flag = Luau::FValue<bool>::list; flag; flag = flag->next)
     {

@@ -1,26 +1,24 @@
---// LuauCeption - Compiler variant
---// Luau 0.654 (8cc289fae430d9b0c22bde209fe5cf2d01751ff1)
-
-local STUB_WARN = true
-
 local cfns = {
-    ["luau_compile"] = FUNC_LIST[276],
-    ["set_flag"] = FUNC_LIST[575],
-    ["set_all_flags"] = FUNC_LIST[582],
-    ["reset_flags"] = FUNC_LIST[584],
-    ["strlen"] = FUNC_LIST[545],
-    ["malloc"] = FUNC_LIST[552],
-    ["_emscripten_timeout"] = FUNC_LIST[770],
-    ["free"] = FUNC_LIST[554],
-    ["_emscripten_stack_restore"] = FUNC_LIST[564],
-    ["emscripten_stack_get_current"] = FUNC_LIST[566],
+    ["luau_compile"] = FUNC_LIST[272],
+    ["set_flag"] = FUNC_LIST[568],
+    ["set_all_flags"] = FUNC_LIST[575],
+    ["reset_flags"] = FUNC_LIST[577],
+    ["strlen"] = FUNC_LIST[535],
+    ["malloc"] = FUNC_LIST[545],
+    ["_emscripten_timeout"] = FUNC_LIST[751],
+    ["free"] = FUNC_LIST[547],
+    ["_emscripten_stack_restore"] = FUNC_LIST[557],
+    ["emscripten_stack_get_current"] = FUNC_LIST[559],
 }
 
+local LONGJMP_THROW_SIGN = newproxy(false)
 local timers = {}
 local noExitRuntime = true
 local rtKeepAliveCounter = 0
 local abortWasm = false
 local exitStatus = nil
+
+--@@UTILS@@
 
 --// __cxa_throw
 FUNC_LIST[0] = function(except, info, _dtor)
@@ -136,12 +134,13 @@ local function luau_compile(src: string, optLevel: number?, dbgLevel: number?, t
     return bc, bcSize
 end
 
+--@@FLAGS@@
+
 return {
 	luau_compile = luau_compile,
     luau_setflag = luau_setflag,
     luau_setallflags = luau_setallflags,
     luau_resetflags = luau_resetflags,
-    macros = macros,
 	wasm = {
 		rt = rt,
 		cfns = cfns,

@@ -1,8 +1,3 @@
---// LuauCeption - VM variant
---// Luau 0.654 (8cc289fae430d9b0c22bde209fe5cf2d01751ff1)
-
-local STUB_WARN = true
-
 local cfns = {
     ["luaL_newstate"] = FUNC_LIST[315],
     ["lua_close"] = FUNC_LIST[383],
@@ -189,8 +184,11 @@ local cfns = {
     ["emscripten_stack_get_current"] = FUNC_LIST[675],
 }
 
+--@@MACROS@@
+
 local NOW_TIME = os.time() * 1000
 local FILE_MAP = { {}, {} }
+local LONGJMP_THROW_SIGN = newproxy(false)
 local timers = {}
 local noExitRuntime = true
 local rtKeepAliveCounter = 0
@@ -207,6 +205,8 @@ local function fd_flush(file)
     table.clear(file)
     file[1] = string.sub(final, last + 1)
 end
+
+--@@UTILS@@
 
 --// __cxa_throw
 FUNC_LIST[0] = function(except, info, _dtor)
@@ -258,7 +258,7 @@ end
 
 --// _emscripten_throw_longjmp
 FUNC_LIST[8] = function()
-    assert(false, "Infinity")
+    error(LONGJMP_THROW_SIGN, 0)
 end
 
 --// _setitimer_js
@@ -279,7 +279,7 @@ FUNC_LIST[9] = function(which, timeoutMs)
         -- callUserCallback(() => __emscripten_timeout(which, _emscripten_get_now()));
         if (abortWasm) then return end
         local success, e = pcall(function()
-            cfns.__emscripten_timeout(which, os.clock())
+            cfns._emscripten_timeout(which, os.clock())
             if (not (noExitRuntime or rtKeepAliveCounter > 0)) then
                 local success, e = pcall(FUNC_LIST[6], exitStatus)
                 if (not success) then
@@ -423,6 +423,8 @@ local function luau_load(bc: string, chunkName: string?, safeEnv: boolean?): () 
         return luau_run(bc, chunkName, safeEnv)
     end
 end
+
+--@@FLAGS@@
 
 return {
     luau_run = luau_run,

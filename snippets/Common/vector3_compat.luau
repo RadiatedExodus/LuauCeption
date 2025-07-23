@@ -4,10 +4,7 @@
 --// Last checked: 11 December 2024
 local type = type
 local typeof = typeof
-local Vector3 = Vector3 do
-    local lOk, lRbx = pcall(require, "@lune/roblox")
-    Vector3 = Vector3 or (if lOk then lRbx.Vector3 else nil) or (if vector then { new = vector.create } else nil)
-end
+local Vector3 = Vector3 or (if vector then { new = vector.create } else nil)
 if not Vector3 then
     local Vector3Internal = {}
     Vector3Internal.__index = Vector3Internal
@@ -51,7 +48,6 @@ if not Vector3 then
         else
             assert(false, "attempt to perform arithmetic (mod) on Vector3 and "..typeof(t))
         end
-        return
     end
     Vector3Internal.__pow = function(_, t)
         if (typeof(t) == "table") and (t["__type"] == "Vector3") then
@@ -59,7 +55,6 @@ if not Vector3 then
         else
             assert(false, "attempt to perform arithmetic (pow) on Vector3 and "..typeof(t))
         end
-        return
     end
     Vector3Internal.__tostring = function(self)
         return self.X..", "..self.Y..", "..self.Z

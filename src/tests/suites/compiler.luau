@@ -5,7 +5,7 @@ local req = frktest.assert.require
 local msg = frktest.assert.msg
 
 test.suite("Compiler", function()
-    local Compiler = require("../../../build/Luau.LuauCeption.Compiler")
+    local Compiler = require("../../../output/Luau.LuauCeption.Compiler")
     for opt = 0, 2 do
         for dbg = 0, 2 do
             for typInf = 0, 2 do

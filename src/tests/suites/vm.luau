@@ -5,8 +5,8 @@ local req = frktest.assert.require
 local msg = frktest.assert.msg
 
 test.suite("VM", function()
-    local Compiler = require("../../../build/Luau.LuauCeption.Compiler")
-    local VM = require("../../../build/Luau.LuauCeption.VM")
+    local Compiler = require("../../../output/Luau.LuauCeption.Compiler")
+    local VM = require("../../../output/Luau.LuauCeption.VM")
     for opt = 0, 2 do
         for dbg = 0, 2 do
             for typInf = 0, 2 do
