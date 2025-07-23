@@ -85,6 +85,7 @@ return {
     luau_setflag = luau_setflag,
     luau_setallflags = luau_setallflags,
     luau_resetflags = luau_resetflags,
+    macros = macros,
 	wasm = {
 		rt = rt,
 		cfns = cfns,
