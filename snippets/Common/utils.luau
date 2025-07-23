@@ -45,9 +45,9 @@ local function invokeHandler(index)
         local sp = cfns.emscripten_stack_get_current()
         local e, stacktrace = "N/A", "N/A"
         local success = xpcall(
-            function(...) return INDIRECT_FUNCTIONS.data[fnIndex](...) end,
+            INDIRECT_FUNCTIONS.data[fnIndex],
             function(a) e = a; stacktrace = debug.traceback() end,
-            ...	
+            ...
         )
         if (not success) then
             cfns._emscripten_stack_restore(sp)
