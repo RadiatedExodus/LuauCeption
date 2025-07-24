@@ -1,11 +1,9 @@
 local task = task or require("@lune/task")
-local RuntimeInitialize = require("@self/runtime")
-local RuntimeInstance;
-local rt, memory_at_0, cfns, INDIRECT_FUNCTIONS
 
---@@UTILS@@
+return function(utils: typeof(require("./utils")()))
+    local rt, memory_at_0, cfns, INDIRECT_FUNCTIONS
+    local polyfill = {}
 
-do
     local NOW_TIME = os.time() * 1000
     local FILE_MAP = { {}, {} }
     local __TIMERS = {}
@@ -14,16 +12,7 @@ do
     local __NO_EXIT_RUNTIME = true
     local __RUNTIME_KEEPALIVE_COUNTER = 0
 
-    local function proc_exit(code)
-        __EXIT_STATUS = code
-        if (not (__NO_EXIT_RUNTIME or __RUNTIME_KEEPALIVE_COUNTER > 0)) then
-            __ABORT_WASM = true
-        end
-
-        assert(false, `ExitStatus: Program exited with code ${code}`)
-    end
-
-    local function fd_flush(file)
+    local function fd_flush(file: {string})
         local final = table.concat(file)
         local last = 1
         for index, data in string.gmatch(final, '()([^\n]*)\n') do
@@ -34,7 +23,16 @@ do
         file[1] = string.sub(final, last + 1)
     end
 
-    local function fd_write(fd, list, count, ret_pointer)
+    function polyfill.proc_exit(code: number)
+        __EXIT_STATUS = code
+        if (not (__NO_EXIT_RUNTIME or __RUNTIME_KEEPALIVE_COUNTER > 0)) then
+            __ABORT_WASM = true
+        end
+
+        assert(false, `ExitStatus: Program exited with code ${code}`)
+    end
+
+    function polyfill.fd_write(fd, list, count, ret_pointer)
         local file = FILE_MAP[fd]
         if not file then return 8 end
         local total = 0
@@ -50,34 +48,34 @@ do
         return 0
     end
 
-    local function _abort_js(reason)
+    function polyfill._abort_js(reason: any)
         assert(false, `Aborted({reason})`)
     end
 
-    local function __cxa_throw(ptr, type, destructor)
-        local info = CException.new(ptr)
+    function polyfill.__cxa_throw(ptr, type, destructor)
+        local info = utils.newCException(ptr)
         assert(false, `exception occured in c: {info:_UndecoratedName()} ({info:vfptr()})`)
     end
 
-    local function emscripten_resize_heap(_requestedSize)
+    function polyfill.emscripten_resize_heap(_requestedSize: number)
         assert(false, "OOM")
     end
 
-    local function emscripten_date_now()
+    function polyfill.emscripten_date_now()
         return NOW_TIME + os.clock() * 1000
     end
 
-    local function _emscripten_throw_longjmp()
+    function polyfill._emscripten_throw_longjmp()
         return error("Infinity", 0)
     end
 
-    local function _emscripten_runtime_keepalive_clear()
+    function polyfill._emscripten_runtime_keepalive_clear()
         __NO_EXIT_RUNTIME = false
         __RUNTIME_KEEPALIVE_COUNTER = 0
         return
     end
 
-    local function _setitimer_js(which, timeoutMs)
+    function polyfill._setitimer_js(which, timeoutMs)
         if (not task) then
             print("program is using _setitimer_js but task library not found, timers will NOT work.")
             return 0
@@ -103,7 +101,7 @@ do
                     return
                 end
 
-                local exit_success, exit_err = pcall(proc_exit, __EXIT_STATUS)
+                local exit_success, exit_err = pcall(polyfill.proc_exit, __EXIT_STATUS)
                 if exit_success then
                     return
                 end
@@ -126,7 +124,7 @@ do
         return 0
     end
 
-    local function _localtime_js(timer, buf)
+    function polyfill._localtime_js(timer, buf)
         local tdata = os.date("*t", rt.i64.into_u64(timer))
         
         --// https://en.cppreference.com/w/cpp/chrono/c/tm
@@ -141,7 +139,7 @@ do
         rt.store.i32(memory_at_0, buf + 32, if tdata.isdst then 1 else 0) --// int tm_isdst
     end
 
-    local function _gmtime_js(timer, buf)
+    function polyfill._gmtime_js(timer, buf)
         local tdata = os.date("!*t", rt.i64.into_u64(timer))
 
         --// https://en.cppreference.com/w/cpp/chrono/c/tm
@@ -156,14 +154,14 @@ do
         rt.store.i32(memory_at_0, buf + 32, if tdata.isdst then 1 else 0) --// int tm_isdst
     end
 
-    local function clock_time_get(clock_id: number, ignored_precision: boolean, ptime: number)
+    function polyfill.clock_time_get(clock_id: number, ignored_precision: boolean, ptime: number)
         if not (clock_id >= 0 and clock_id <= 3) then
             return 28
         end
 
         local time_now
         if clock_id == 0 then
-            time_now = emscripten_date_now()
+            time_now = polyfill.emscripten_date_now()
         elseif true then -- if nowIsMonotonic is 1
             time_now = os.clock()
         end
@@ -173,33 +171,7 @@ do
         return 0
     end
 
-    RuntimeInstance = RuntimeInitialize({
-        env = {
-            func_list = {
-                _tzset_js = stub("_tzset_js"),
-                invoke_vii = invokeHandler(1),
-                _abort_js = _abort_js,
-                __cxa_throw = __cxa_throw,
-                emscripten_date_now = emscripten_date_now,
-                emscripten_resize_heap = emscripten_resize_heap,
-                _emscripten_runtime_keepalive_clear = _emscripten_runtime_keepalive_clear,
-                _emscripten_throw_longjmp = _emscripten_throw_longjmp,
-                _setitimer_js = _setitimer_js,
-                _localtime_js = _localtime_js,
-                _gmtime_js = _gmtime_js,
-            }
-        },
-        wasi_snapshot_preview1 = {
-            func_list = {
-                clock_time_get = clock_time_get,
-                proc_exit = proc_exit,
-                fd_write = fd_write,
-            }
-        }
-    })
-    rt, memory_at_0, cfns, INDIRECT_FUNCTIONS =
-        RuntimeInstance.rt,
-        RuntimeInstance.memory_list.memory,
-        RuntimeInstance.func_list,
-        RuntimeInstance.table_list.__indirect_function_table
+    return polyfill, function(c_rt, c_memory_at_0, c_cfns, c_INDIRECT_FUNCTIONS)
+        rt, memory_at_0, cfns, INDIRECT_FUNCTIONS = c_rt, c_memory_at_0, c_cfns, c_INDIRECT_FUNCTIONS
+    end
 end

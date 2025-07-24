@@ -1,7 +1,6 @@
 local fs = require("@lune/fs")
 local process = require("@lune/process")
 local regex = require("@lune/regex")
-local task = require("@lune/task")
 
 local LUAU_GIT_HASH, LUAU_GIT_TAG = (function()
     local GIT_EXEC_OPTIONS = {
@@ -41,10 +40,18 @@ local BUILD_DIR = "./output"
 
 local VARIANT_PREFIX = "Luau.LuauCeption"
 
+local function getRokitExec(exec: string): string
+	if process.os == "windows" then
+		return exec
+	end
+
+	return `{process.env["HOME"]}/.rokit/bin/{exec}`
+end
+
 local function createHeaderSnippet(variant: BuildVariant): string
     local result = {
         `--// LuauCeption - {variant} Variant`,
-        `--// Build from Luau {LUAU_GIT_TAG} ({LUAU_GIT_HASH})`,
+        `--// Build from Luau {LUAU_GIT_TAG} ({LUAU_GIT_HASH})\n\n`,
     }
     return table.concat(result, "\n")
 end
@@ -52,78 +59,50 @@ end
 local VARIANT_BUILD_SNIPPET_ORDER: {[string]: VariantSnippetInstructions} = {
     ["Compiler"] = {
         ["runtime"] = {
-            {"goto", "end", "--!optimize 2"},
+            {"goto", "end", "--!optimize 2\n"},
             {"putstring", createHeaderSnippet("Compiler")},
             {"putfile", "Common/vector3_compat.luau"},
         },
         ["entrypoint"] = {
-            {"putfile", "Compiler/init.luau"},
-            {"goto", "end", "--!optimize 2"},
-            {"putstring", createHeaderSnippet("Compiler")},
-            
-            {"goto", "start", "--@@UTILS@@"},
-            {"removeline"},
-            {"putfile", "Common/utils.luau"},
+            {"putfile", "Compiler/entrypoint.luau"},
+            {"process", "./utils/builder/build.darklua.json"},
 
-            {"goto", "start", "--@@FLAGS@@"},
-            {"removeline"},
-            {"putfile", "Common/flags.luau"},
+            {"gotopos", 1},
+            {"putstring", "--!optimize 2\n"},
+            {"putstring", createHeaderSnippet("Compiler")},
+            {"putstring", "local STUB_WARN = false\n"},
         },
     },
     ["VM"] = {
         ["runtime"] = {
-            {"goto", "end", "--!optimize 2"},
+            {"goto", "end", "--!optimize 2\n"},
             {"putstring", createHeaderSnippet("VM")},
             {"putfile", "Common/vector3_compat.luau"},
         },
         ["entrypoint"] = {
-            {"putfile", "VM/init.luau"},
-            {"goto", "end", "--!optimize 2"},
-            {"putstring", createHeaderSnippet("VM")},
-            
-            {"goto", "start", "--@@VM_COMMONS@@"},
-            {"removeline"},
-            {"putfile", "VM/commons.luau"},
+            {"putfile", "VM/entrypoint.luau"},
+            {"process", "./utils/builder/build.darklua.json"},
 
-            {"goto", "start", "--@@UTILS@@"},
-            {"removeline"},
-            {"putfile", "Common/utils.luau"},
-
-            {"goto", "start", "--@@FLAGS@@"},
-            {"removeline"},
-            {"putfile", "Common/flags.luau"},
-
-            {"goto", "start", "--@@MACROS@@"},
-            {"removeline"},
-            {"putfile", "VM/luau_macros.luau"},
+            {"gotopos", 1},
+            {"putstring", "--!optimize 2\n"},
+            {"putstring", createHeaderSnippet("Compiler")},
+            {"putstring", "local STUB_WARN = false\n"},
         },
     },
     ["Full"] = {
         ["runtime"] = {
-            {"goto", "end", "--!optimize 2"},
+            {"goto", "end", "--!optimize 2\n"},
             {"putstring", createHeaderSnippet("Full")},
             {"putfile", "Common/vector3_compat.luau"},
         },
         ["entrypoint"] = {
-            {"putfile", "Full/init.luau"},
-            {"goto", "end", "--!optimize 2"},
-            {"putstring", createHeaderSnippet("Full")},
-            
-            {"goto", "start", "--@@VM_COMMONS@@"},
-            {"removeline"},
-            {"putfile", "VM/commons.luau"},
+            {"putfile", "Full/entrypoint.luau"},
+            {"process", "./utils/builder/build.darklua.json"},
 
-            {"goto", "start", "--@@UTILS@@"},
-            {"removeline"},
-            {"putfile", "Common/utils.luau"},
-
-            {"goto", "start", "--@@FLAGS@@"},
-            {"removeline"},
-            {"putfile", "Common/flags.luau"},
-
-            {"goto", "start", "--@@MACROS@@"},
-            {"removeline"},
-            {"putfile", "VM/luau_macros.luau"},
+            {"gotopos", 1},
+            {"putstring", "--!optimize 2\n"},
+            {"putstring", createHeaderSnippet("Compiler")},
+            {"putstring", "local STUB_WARN = false\n"},
         },
     },
 }
@@ -137,21 +116,23 @@ local function processSnippetOrder(snippet_orders: {{string}}, to_process: strin
     local result = to_process
 
     for _, order in snippet_orders do
-        local command = order[1]
+        local command = table.remove(order, 1)
 
         if command == "goto" then
-            local pattern = regex.new(order[3]):find(result)
+            local pattern = regex.new(order[2]):find(result)
             if not pattern then
-                print(`Cannot find pattern '{order[3]}' on goto command`)
+                print(`Cannot find pattern '{order[2]}' on goto command`)
                 continue
             end
 
-            local position_mode = order[2]
+            local position_mode = order[1]
             if position_mode == "start" then
                 current_position = pattern.start
             elseif position_mode == "end" then
                 current_position = pattern.finish + 1
             end
+        elseif command == "gotopos" then
+            current_position = order[1]
         elseif command == "remove_to_end" then
             result = string.sub(result, 1, current_position - 1)
         elseif command == "removeline" then
@@ -164,22 +145,62 @@ local function processSnippetOrder(snippet_orders: {{string}}, to_process: strin
             result = pre .. post
             current_position = corrected_pos or current_position
         elseif command == "putstring" or command == "putfile" then
-            local content = order[2]
+            local content = order[1]
             if command == "putfile" then
-                local file_path = getAbsolutePath(`./snippets/{order[2]}`)
+                local file_path = getAbsolutePath(`./snippets/{order[1]}`)
                 if not fs.isFile(file_path) then
-                    return error(`Cannot find assigned file '{order[2]}' on putfile command!`)
+                    return error(`Cannot find assigned file '{order[1]}' on putfile command!`)
                 end
 
-                content = fs.readFile(file_path)
+                content = fs.readFile(file_path) .. "\n"
             end
 
             local content_len = (utf8.len(content) :: number) + 1
-            local str_start = string.sub(result, 1, current_position)
+            local str_start = string.sub(result, 1, current_position - 1)
             local str_end = string.sub(result, current_position)
 
             result = str_start .. content .. str_end
-            current_position += content_len
+            current_position = #str_start + content_len
+        elseif command == "process" then
+            local temp_dir_path = getAbsolutePath("./snippets/_temp")
+            if not fs.isDir(temp_dir_path) then
+                fs.writeDir(temp_dir_path)
+            end
+
+            local darklua_file_path = getRokitExec("darklua")
+            if not fs.isFile(darklua_file_path) then
+                return error("Cannot find darklua executable file which is needed on process command!")
+            end
+
+            local config_file = getAbsolutePath(order[1])
+            if not fs.isFile(config_file) then
+                return error(`Cannot find provided darklua config file '{order[1]}' on process command!`)
+            end
+
+            local process_id = os.time()
+            local temp_file_path = `{temp_dir_path}/__{process_id}.luau`
+            local temp_file_result_path = getAbsolutePath(`./utils/builders/_tempresult{process_id}.luau`)
+
+            fs.writeFile(temp_file_path, result)
+
+            local exec_result = process.exec(
+                darklua_file_path,
+                {
+                    "process",
+                    temp_file_path,
+                    temp_file_result_path,
+                    "-c",
+                    config_file
+                }
+            )
+            if exec_result.ok then
+                result = fs.readFile(temp_file_result_path)
+                fs.removeFile(temp_file_path)
+                fs.removeFile(temp_file_result_path)
+            else
+                fs.readFile(temp_file_path)
+                return error(`Process command failed, log:\n{exec_result.stderr}`, 0)
+            end
         end
     end
     return result

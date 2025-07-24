@@ -1,0 +1,29 @@
+{
+  "generator": {
+    "name": "readable",
+    "column_span": 131072
+  },
+
+  "bundle": {
+    "modules_identifier": "__LUAUCEPTION__",
+    "excludes": ["@self/**", "@self/..*", "@lune/**"],
+
+    "require_mode": {
+      "name": "path",
+      "module_folder_name": "init",
+      "use_luau_configuration": true
+    }
+  },
+
+  "rules": [
+    {
+      "rule": "remove_comments",
+      "except": ["^--!"]
+    },
+    "remove_nil_declaration",
+    "remove_unused_if_branch",
+    "remove_unused_while",
+    "filter_after_early_return",
+    "remove_empty_do"
+  ]
+}

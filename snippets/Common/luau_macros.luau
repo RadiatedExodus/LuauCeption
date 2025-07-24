@@ -1,4 +1,4 @@
-local macros do
+return function(rt, memory_at_0, cfns, INDIRECT_FUNCTIONS)
     local LUAI_MAXCSTACK    = 8000
     local LUA_REGISTRYINDEX = -LUAI_MAXCSTACK - 2000
     local LUA_ENVIRONINDEX  = -LUAI_MAXCSTACK - 2001
@@ -21,7 +21,7 @@ local macros do
     local LUA_TDEADKEY       = 13
     local LUA_T_COUNT        = LUA_TPROTO
 
-    macros = {
+    local macros = {
         LUA_TNIL           = LUA_TNIL,
         LUA_TBOOLEAN       = LUA_TBOOLEAN,
         LUA_TLIGHTUSERDATA = LUA_TLIGHTUSERDATA,
@@ -135,4 +135,5 @@ local macros do
         --// luaL_addchar     = function(B, c)                   return ((void)((B)->p < (B)->end || luaL_prepbuffsize(B, 1)), (*(B)->p++ = (char)(c))) end,
         luaL_addstring        = function(B, s)                   return cfns.luaL_addlstring(B, s, cfns.strlen(s)) end,
     }
+    return macros
 end
