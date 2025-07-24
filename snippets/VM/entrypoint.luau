@@ -56,7 +56,7 @@ return {
     luau_setflag = api_flags.luau_setflag,
     luau_setallflags = api_flags.luau_setallflags,
     luau_resetflags = api_flags.luau_resetflags,
-    macros = require("../Common/luau_macros"),
+    macros = require("../Common/luau_macros")(rt, memory_at_0, cfns, INDIRECT_FUNCTIONS),
     wasm = {
         rt = rt,
         cfns = cfns,
