@@ -1,5 +1,8 @@
 #include <string>
 
-extern "C" bool set_flag(std::string name, bool state);
-extern "C" void set_all_flags(bool state);
-extern "C" void reset_flags();
+#include <emscripten.h>
+#define EXPORT extern "C" EMSCRIPTEN_KEEPALIVE
+
+EXPORT bool set_flag(std::string name, bool state);
+EXPORT void set_all_flags(bool state);
+EXPORT void reset_flags();
