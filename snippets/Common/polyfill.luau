@@ -5,6 +5,7 @@ return function(utils: typeof(require("./utils")()))
     local polyfill = {}
 
     local FILE_MAP = { {}, {} }
+    local LONGJMP_THROW_SIGN = newproxy(false)
     local __TIMERS = {}
     local __EXIT_STATUS = nil
     local __ABORT_WASM = false
@@ -38,7 +39,7 @@ return function(utils: typeof(require("./utils")()))
             end
 
             cfns._emscripten_stack_restore(stack_ptr)
-            if typeof(err) == "string" then
+            if err ~= LONGJMP_THROW_SIGN then
                 error(`{err}\n\ninvoke stacktrace:\n{stacktrace}`, 2)
             end
 
@@ -59,7 +60,7 @@ return function(utils: typeof(require("./utils")()))
     end
 
     function polyfill._emscripten_throw_longjmp()
-        return error("Infinity", 0)
+        return error(LONGJMP_THROW_SIGN, 0)
     end
 
     function polyfill._emscripten_runtime_keepalive_clear()

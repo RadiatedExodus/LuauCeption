@@ -4,10 +4,15 @@ return function(utils: typeof(require("../Common/utils")()))
     local rt, memory_at_0, cfns, INDIRECT_FUNCTIONS
     local polyfill, common_polyfill_ready = common_polyfill_create(utils)
 
-    local NOW_TIME = os.time() * 1000
+    local START_CLOCK, NOW_TIME = os.clock(), os.time() * 1000
+
+    -- returns time since the instance was initialized
+    local function now_clock(): number
+        return os.clock() - START_CLOCK
+    end
 
     function polyfill.emscripten_date_now()
-        return NOW_TIME + os.clock() * 1000
+        return NOW_TIME + now_clock() * 1000
     end
     
     function polyfill._localtime_js(timer, buf)
@@ -49,7 +54,7 @@ return function(utils: typeof(require("../Common/utils")()))
         if clock_id == 0 then
             time_now = polyfill.emscripten_date_now()
         elseif true then -- if nowIsMonotonic is 1
-            time_now = os.clock()
+            time_now = now_clock()
         end
 
         local nsec = math.round(time_now * 1000 * 1000)
