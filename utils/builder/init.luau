@@ -56,6 +56,24 @@ local function createHeaderSnippet(variant: BuildVariant): string
     return table.concat(result, "\n")
 end
 
+local DARKLUA_PATCHES = {
+    ["IMPORT_PATTERN"] = "__LUAUCEPTION__\\.load\\('([\\w+])'\\)",
+    ["IMPORT_REPLACEMENT"] = "__LUAUCEPTION__[\"$1\"]()",
+    ["IMPORT_LOADER"] =[[
+local __CACHE__LUAUCEPTION__ = {}
+local __LUAUCEPTION__ = setmetatable({}, {
+    __index = function(self, m)
+        if not __CACHE__LUAUCEPTION__[m] then
+            local module = rawget(self, m)()
+            __CACHE__LUAUCEPTION__[m] = function()
+                return module
+            end
+        end
+        return __CACHE__LUAUCEPTION__[m] or rawget(self, m)
+    end
+})
+]],
+}
 local VARIANT_BUILD_SNIPPET_ORDER: {[string]: VariantSnippetInstructions} = {
     ["Compiler"] = {
         ["runtime"] = {
@@ -71,6 +89,11 @@ local VARIANT_BUILD_SNIPPET_ORDER: {[string]: VariantSnippetInstructions} = {
             {"putstring", "--!optimize 2\n"},
             {"putstring", createHeaderSnippet("Compiler")},
             {"putstring", "local STUB_WARN = false\n"},
+
+            {"goto", "start", "local __LUAUCEPTION__"},
+            {"removelines", 14},
+            {"putstring", DARKLUA_PATCHES.IMPORT_LOADER},
+            {"replaceall", DARKLUA_PATCHES.IMPORT_PATTERN, DARKLUA_PATCHES.IMPORT_REPLACEMENT}
         },
     },
     ["VM"] = {
@@ -87,6 +110,11 @@ local VARIANT_BUILD_SNIPPET_ORDER: {[string]: VariantSnippetInstructions} = {
             {"putstring", "--!optimize 2\n"},
             {"putstring", createHeaderSnippet("VM")},
             {"putstring", "local STUB_WARN = false\n"},
+
+            {"goto", "start", "local __LUAUCEPTION__"},
+            {"removelines", 14},
+            {"putstring", DARKLUA_PATCHES.IMPORT_LOADER},
+            {"replaceall", DARKLUA_PATCHES.IMPORT_PATTERN, DARKLUA_PATCHES.IMPORT_REPLACEMENT}
         },
     },
     ["Full"] = {
@@ -103,6 +131,11 @@ local VARIANT_BUILD_SNIPPET_ORDER: {[string]: VariantSnippetInstructions} = {
             {"putstring", "--!optimize 2\n"},
             {"putstring", createHeaderSnippet("Full")},
             {"putstring", "local STUB_WARN = false\n"},
+
+            {"goto", "start", "local __LUAUCEPTION__"},
+            {"removelines", 14},
+            {"putstring", DARKLUA_PATCHES.IMPORT_LOADER},
+            {"replaceall", DARKLUA_PATCHES.IMPORT_PATTERN, DARKLUA_PATCHES.IMPORT_REPLACEMENT}
         },
     },
 }
@@ -133,17 +166,28 @@ local function processSnippetOrder(snippet_orders: {{string}}, to_process: strin
             end
         elseif command == "gotopos" then
             current_position = order[1]
-        elseif command == "remove_to_end" then
-            result = string.sub(result, 1, current_position - 1)
         elseif command == "removeline" then
-            local str_start = string.sub(result, 1, current_position)
+            local str_start = string.sub(result, 1, current_position - 1)
             local str_end = string.sub(result, current_position)
             local pre = string.match(str_start, "^(.*)\n[^\n]*$") or ""
             local post = string.match(str_end, "^[^\n]*\n?(.*)$") or ""
-            local corrected_pos = string.match(string.sub(result, 1, current_position - 1), ".*()\n")
+            local corrected_pos = string.match(str_start, ".*()\n")
 
             result = pre .. post
             current_position = corrected_pos or current_position
+        elseif command == "removelines" then
+            local current_str = string.sub(result, current_position)
+            local newline_pos = 0
+
+            for _ = 1, order[1] do
+                local start_pos, end_pos = string.find(current_str, "[^\n]*\n", newline_pos + 1)
+                if not start_pos then
+                    error("Provided line count exceeded!")
+                end
+
+                newline_pos = end_pos
+            end
+            result = string.sub(result, 1, current_position - 1) .. string.sub(result, current_position + newline_pos)
         elseif command == "putstring" or command == "putfile" then
             local content = order[1]
             if command == "putfile" then
@@ -161,6 +205,9 @@ local function processSnippetOrder(snippet_orders: {{string}}, to_process: strin
 
             result = str_start .. content .. str_end
             current_position = #str_start + content_len
+        elseif command == "replaceall" then
+            local pattern = regex.new(order[1])
+            result = pattern:replaceAll(result, order[2])
         elseif command == "process" then
             local temp_dir_path = getAbsolutePath("./snippets/_temp")
             if not fs.isDir(temp_dir_path) then
