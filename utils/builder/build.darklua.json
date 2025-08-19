@@ -9,8 +9,7 @@
     "excludes": ["@self/**", "@self/..*", "@lune/**"],
 
     "require_mode": {
-      "name": "path",
-      "module_folder_name": "init",
+      "name": "luau",
       "use_luau_configuration": true
     }
   },

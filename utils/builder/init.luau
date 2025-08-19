@@ -2,6 +2,12 @@ local fs = require("@lune/fs")
 local process = require("@lune/process")
 local regex = require("@lune/regex")
 
+local FLAGS = {
+    -- this workaround is temporary!!!
+    -- see: https://github.com/seaofvoices/darklua/pull/300
+    EXPERIMENTAL_BUNDLED_MODULES_TYPES_FIX = true,
+}
+
 local LUAU_GIT_HASH, LUAU_GIT_TAG = (function()
     local GIT_EXEC_OPTIONS = {
         cwd = "./luau"
@@ -90,6 +96,7 @@ local VARIANT_BUILD_SNIPPET_ORDER: {[string]: VariantSnippetInstructions} = {
             {"putstring", createHeaderSnippet("Compiler")},
             {"putstring", "local STUB_WARN = false\n"},
 
+            {"pcjumpif", 4, not FLAGS.EXPERIMENTAL_BUNDLED_MODULES_TYPES_FIX},
             {"goto", "start", "local __LUAUCEPTION__"},
             {"removelines", 14},
             {"putstring", DARKLUA_PATCHES.IMPORT_LOADER},
@@ -111,6 +118,7 @@ local VARIANT_BUILD_SNIPPET_ORDER: {[string]: VariantSnippetInstructions} = {
             {"putstring", createHeaderSnippet("VM")},
             {"putstring", "local STUB_WARN = false\n"},
 
+            {"pcjumpif", 4, not FLAGS.EXPERIMENTAL_BUNDLED_MODULES_TYPES_FIX},
             {"goto", "start", "local __LUAUCEPTION__"},
             {"removelines", 14},
             {"putstring", DARKLUA_PATCHES.IMPORT_LOADER},
@@ -132,6 +140,7 @@ local VARIANT_BUILD_SNIPPET_ORDER: {[string]: VariantSnippetInstructions} = {
             {"putstring", createHeaderSnippet("Full")},
             {"putstring", "local STUB_WARN = false\n"},
 
+            {"pcjumpif", 4, not FLAGS.EXPERIMENTAL_BUNDLED_MODULES_TYPES_FIX},
             {"goto", "start", "local __LUAUCEPTION__"},
             {"removelines", 14},
             {"putstring", DARKLUA_PATCHES.IMPORT_LOADER},
@@ -145,10 +154,12 @@ local function getAbsolutePath(relative_path: string): string
 end
 
 local function processSnippetOrder(snippet_orders: {{string}}, to_process: string): string
-    local current_position = 0
+    local pc, contentpos = 0, 0
     local result = to_process
 
-    for _, order in snippet_orders do
+    while pc < #snippet_orders do
+        pc += 1
+        local order = snippet_orders[pc]
         local command = table.remove(order, 1)
 
         if command == "goto" then
@@ -160,23 +171,29 @@ local function processSnippetOrder(snippet_orders: {{string}}, to_process: strin
 
             local position_mode = order[1]
             if position_mode == "start" then
-                current_position = pattern.start
+                contentpos = pattern.start
             elseif position_mode == "end" then
-                current_position = pattern.finish + 1
+                contentpos = pattern.finish + 1
+            end
+        elseif command == "pcjumpif" then
+            local pos_offset, flag = unpack(order)
+
+            if flag then
+                pc += pos_offset
             end
         elseif command == "gotopos" then
-            current_position = order[1]
+            contentpos = order[1]
         elseif command == "removeline" then
-            local str_start = string.sub(result, 1, current_position - 1)
-            local str_end = string.sub(result, current_position)
+            local str_start = string.sub(result, 1, contentpos - 1)
+            local str_end = string.sub(result, contentpos)
             local pre = string.match(str_start, "^(.*)\n[^\n]*$") or ""
             local post = string.match(str_end, "^[^\n]*\n?(.*)$") or ""
             local corrected_pos = string.match(str_start, ".*()\n")
 
             result = pre .. post
-            current_position = corrected_pos or current_position
+            contentpos = corrected_pos or contentpos
         elseif command == "removelines" then
-            local current_str = string.sub(result, current_position)
+            local current_str = string.sub(result, contentpos)
             local newline_pos = 0
 
             for _ = 1, order[1] do
@@ -187,7 +204,7 @@ local function processSnippetOrder(snippet_orders: {{string}}, to_process: strin
 
                 newline_pos = end_pos
             end
-            result = string.sub(result, 1, current_position - 1) .. string.sub(result, current_position + newline_pos)
+            result = string.sub(result, 1, contentpos - 1) .. string.sub(result, contentpos + newline_pos)
         elseif command == "putstring" or command == "putfile" then
             local content = order[1]
             if command == "putfile" then
@@ -200,11 +217,11 @@ local function processSnippetOrder(snippet_orders: {{string}}, to_process: strin
             end
 
             local content_len = (utf8.len(content) :: number) + 1
-            local str_start = string.sub(result, 1, current_position - 1)
-            local str_end = string.sub(result, current_position)
+            local str_start = string.sub(result, 1, contentpos - 1)
+            local str_end = string.sub(result, contentpos)
 
             result = str_start .. content .. str_end
-            current_position = #str_start + content_len
+            contentpos = #str_start + content_len
         elseif command == "replaceall" then
             local pattern = regex.new(order[1])
             result = pattern:replaceAll(result, order[2])
@@ -248,6 +265,8 @@ local function processSnippetOrder(snippet_orders: {{string}}, to_process: strin
                 fs.readFile(temp_file_path)
                 return error(`Process command failed, log:\n{exec_result.stderr}`, 0)
             end
+        else
+            error(`Unknown instruction '{order}' provided!`)
         end
     end
     return result
