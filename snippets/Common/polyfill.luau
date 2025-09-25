@@ -1,4 +1,4 @@
-local task = task or require("@lune/task")
+local task = task or (require)("@lune/task")
 
 return function(utils: typeof(require("./utils")()))
     local rt, memory_at_0, cfns, INDIRECT_FUNCTIONS

@@ -5,7 +5,7 @@
   },
   "lintErrors": false,
   "typeErrors": true,
-  "globals": ["Vector3"],
+  "globals": ["Vector3", "task"],
   "aliases": {
     "lune": "~/.lune/.typedefs/0.10.1/",
     "frktest": "./src/tests/frktest/src"

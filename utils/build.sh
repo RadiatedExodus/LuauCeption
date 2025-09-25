@@ -8,4 +8,4 @@ emcmake cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build . --target Luau.LuauCeption.Compiler Luau.LuauCeption.VM Luau.LuauCeption.Full --config RelWithDebInfo -j 2
 
 cd "$MAIN_DIR" 
-lune run "$BUILDER_SCRIPT"
+lune run "$BUILDER_SCRIPT" -f BUILD_ONEFILE

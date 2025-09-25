@@ -1,4 +1,4 @@
-local runtime_initialize = require("@self/runtime")
+local runtime_initialize = (require)("@self/runtime")
 
 local polyfill_create = require("./polyfill")
 local utils_create = require("./utils")

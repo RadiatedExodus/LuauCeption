@@ -8,6 +8,9 @@ local VALID_FLAGS = {
     -- this workaround is temporary!!!
     -- see: https://github.com/seaofvoices/darklua/pull/300
     "EXPERIMENTAL_BUNDLED_MODULES_TYPES_FIX",
+
+    -- combines runtime and entrypoint into one file
+    "BUILD_ONEFILE",
 }
 
 local PARSER = argparse("luauceptionbuilder")
@@ -75,7 +78,15 @@ local function createHeaderSnippet(variant: BuildVariant): string
     return table.concat(result, "\n")
 end
 
+local CONTENT_VARIABLE = newproxy(false)
+
 local FLAGGED_PATCHES = {
+    ["BUILD_ONEFILE"] = {
+        ["IMPORT_PATTERN"] = "\\(require\\)\\(['\"]@self\\/runtime['\"]\\)",
+        ["IMPORT_REPLACEMENT"] = "__LUAUCEPTION_RUNTIME__",
+        ["RUNTIME_REPLACEMENT"] = "&RUNTIME&",
+        ["ENCAPSULATION_CODE"] = "local __LUAUCEPTION_RUNTIME__ = (function()\n\n&RUNTIME&\nend)()\n",
+    },
     ["DARKLUA"] = {
         ["IMPORT_PATTERN"] = "__LUAUCEPTION__\\.load\\('([\\w+])'\\)",
         ["IMPORT_REPLACEMENT"] = "__LUAUCEPTION__[\"$1\"]()",
@@ -93,14 +104,39 @@ local __LUAUCEPTION__ = setmetatable({}, {
     end
 })
 ]],
+    },
+}
+
+local FLAGGED_PATCHES_SNIPPET_ORDER = {
+    ["BUILD_ONEFILE"] = {
+        {"gotoline", 5},
+        {"putstring", "\n\n"},
+        {"putstring", FLAGGED_PATCHES.BUILD_ONEFILE.ENCAPSULATION_CODE},
+        {"replaceall", FLAGGED_PATCHES.BUILD_ONEFILE.IMPORT_PATTERN, FLAGGED_PATCHES.BUILD_ONEFILE.IMPORT_REPLACEMENT},
+        -- we can't use the replaceall instruction here because
+        -- file would be modified by the regex, removing regex-unsafe strings
+        -- which makes the runtime have unexpected errors
+        {"goto", "end", FLAGGED_PATCHES.BUILD_ONEFILE.RUNTIME_REPLACEMENT},
+        {"removelinecursor"},
+        {"putstring", CONTENT_VARIABLE, "LUAUCEPTION_RUNTIME"},
+    },
+    ["DARKLUA_BUNDLER_WORKAROUND"] = {
+        {"goto", "start", "local __LUAUCEPTION__"},
+        {"removelines", 14},
+        {"putstring", FLAGGED_PATCHES.DARKLUA.IMPORT_LOADER},
+        {"replaceall", FLAGGED_PATCHES.DARKLUA.IMPORT_PATTERN, FLAGGED_PATCHES.DARKLUA.IMPORT_REPLACEMENT},
     }
 }
 
 local VARIANT_BUILD_SNIPPET_ORDER: {[string]: VariantSnippetInstructions} = {
     ["Compiler"] = {
         ["runtime"] = {
+            {"jmpifflag", 2, "BUILD_ONEFILE", "defined"},
             {"goto", "end", "--!optimize 2\n"},
             {"putstring", createHeaderSnippet("Compiler")},
+            {"jmpifflag", 2, "BUILD_ONEFILE", "undefined"},
+            {"gotopos", 1},
+            {"removelinecursor"},
             {"putfile", "Common/vector3_compat.luau"},
         },
         ["entrypoint"] = {
@@ -112,17 +148,18 @@ local VARIANT_BUILD_SNIPPET_ORDER: {[string]: VariantSnippetInstructions} = {
             {"putstring", createHeaderSnippet("Compiler")},
             {"putstring", "local STUB_WARN = false\n"},
 
-            {"jmpifflag", 4, "EXPERIMENTAL_BUNDLED_MODULES_TYPES_FIX", "undefined"},
-            {"goto", "start", "local __LUAUCEPTION__"},
-            {"removelines", 14},
-            {"putstring", FLAGGED_PATCHES.DARKLUA.IMPORT_LOADER},
-            {"replaceall", FLAGGED_PATCHES.DARKLUA.IMPORT_PATTERN, FLAGGED_PATCHES.DARKLUA.IMPORT_REPLACEMENT}
+            {"jmpifflag", 1, "EXPERIMENTAL_BUNDLED_MODULES_TYPES_FIX", "undefined"},
+            {"runsnippet", FLAGGED_PATCHES_SNIPPET_ORDER.DARKLUA_BUNDLER_WORKAROUND},
         },
     },
     ["VM"] = {
         ["runtime"] = {
+            {"jmpifflag", 2, "BUILD_ONEFILE", "defined"},
             {"goto", "end", "--!optimize 2\n"},
-            {"putstring", createHeaderSnippet("VM")},
+            {"putstring", createHeaderSnippet("Compiler")},
+            {"jmpifflag", 2, "BUILD_ONEFILE", "undefined"},
+            {"gotopos", 1},
+            {"removelinecursor"},
             {"putfile", "Common/vector3_compat.luau"},
         },
         ["entrypoint"] = {
@@ -134,17 +171,18 @@ local VARIANT_BUILD_SNIPPET_ORDER: {[string]: VariantSnippetInstructions} = {
             {"putstring", createHeaderSnippet("VM")},
             {"putstring", "local STUB_WARN = false\n"},
 
-            {"jmpifflag", 4, "EXPERIMENTAL_BUNDLED_MODULES_TYPES_FIX", "undefined"},
-            {"goto", "start", "local __LUAUCEPTION__"},
-            {"removelines", 14},
-            {"putstring", FLAGGED_PATCHES.DARKLUA.IMPORT_LOADER},
-            {"replaceall", FLAGGED_PATCHES.DARKLUA.IMPORT_PATTERN, FLAGGED_PATCHES.DARKLUA.IMPORT_REPLACEMENT}
+            {"jmpifflag", 1, "EXPERIMENTAL_BUNDLED_MODULES_TYPES_FIX", "undefined"},
+            {"runsnippet", FLAGGED_PATCHES_SNIPPET_ORDER.DARKLUA_BUNDLER_WORKAROUND},
         },
     },
     ["Full"] = {
         ["runtime"] = {
+            {"jmpifflag", 2, "BUILD_ONEFILE", "defined"},
             {"goto", "end", "--!optimize 2\n"},
-            {"putstring", createHeaderSnippet("Full")},
+            {"putstring", createHeaderSnippet("Compiler")},
+            {"jmpifflag", 2, "BUILD_ONEFILE", "undefined"},
+            {"gotopos", 1},
+            {"removelinecursor"},
             {"putfile", "Common/vector3_compat.luau"},
         },
         ["entrypoint"] = {
@@ -156,11 +194,8 @@ local VARIANT_BUILD_SNIPPET_ORDER: {[string]: VariantSnippetInstructions} = {
             {"putstring", createHeaderSnippet("Full")},
             {"putstring", "local STUB_WARN = false\n"},
 
-            {"jmpifflag", 4, "EXPERIMENTAL_BUNDLED_MODULES_TYPES_FIX", "undefined"},
-            {"goto", "start", "local __LUAUCEPTION__"},
-            {"removelines", 14},
-            {"putstring", FLAGGED_PATCHES.DARKLUA.IMPORT_LOADER},
-            {"replaceall", FLAGGED_PATCHES.DARKLUA.IMPORT_PATTERN, FLAGGED_PATCHES.DARKLUA.IMPORT_REPLACEMENT}
+            {"jmpifflag", 1, "EXPERIMENTAL_BUNDLED_MODULES_TYPES_FIX", "undefined"},
+            {"runsnippet", FLAGGED_PATCHES_SNIPPET_ORDER.DARKLUA_BUNDLER_WORKAROUND},
         },
     },
 }
@@ -169,13 +204,24 @@ local function getAbsolutePath(relative_path: string): string
     return `{process.cwd}/{relative_path}`
 end
 
-local function processSnippetOrder(snippet_orders: {{string}}, to_process: string, flags: BuilderFlags): string
-    local pc, contentpos = 0, 0
-    local result = to_process
+local function processSnippetOrder(
+    snippet_orders: {SnippetOrder},
+    flags: BuilderFlags,
+    variables: {string}?,
+    input: string
+): (string, number)
+    local _VARS: {string} = variables or {}
+    local exit_code = 0
+    local pc, contentpos = 0, 1
+    local result = input
 
-    while pc < #snippet_orders do
+    while true do
+        if pc >= #snippet_orders then
+            break 
+        end
+
         pc += 1
-        local order = snippet_orders[pc]
+        local order = table.clone(snippet_orders[pc])
         local command = table.remove(order, 1)
 
         if command == "goto" then
@@ -187,14 +233,17 @@ local function processSnippetOrder(snippet_orders: {{string}}, to_process: strin
 
             local position_mode = order[1]
             if position_mode == "start" then
-                contentpos = pattern.start
+                contentpos = pattern.start - 1
             elseif position_mode == "end" then
                 contentpos = pattern.finish + 1
             end
+        elseif command == "runsnippet" then
+            local snippets = table.clone(order[1])
+            table.move(snippets, 1, #snippets, #snippet_orders, snippet_orders)
         elseif command == "jmpifflag" then
             local pos_offset, flag_name, action = unpack(order)
             if not table.find(VALID_FLAGS, flag_name) then
-                print(`[WARN]: Flag '{flag_name}' is not defined as valid flag, but is included in snippet ordering!`)
+                print(`[WARN]: Flag '{flag_name}' is not valid flag, but is included in snippet ordering!`)
                 continue
             end
 
@@ -207,7 +256,19 @@ local function processSnippetOrder(snippet_orders: {{string}}, to_process: strin
             end
         elseif command == "gotopos" then
             contentpos = order[1]
-        elseif command == "removeline" then
+        elseif command == "gotoline" then
+            local newline_pos = 0
+
+            for _ = 1, order[1] do
+                local start_pos, end_pos = string.find(result, "[^\n]*\n", newline_pos + 1)
+                if not start_pos then
+                    error("Provided line count exceeded!")
+                end
+
+                newline_pos = end_pos
+            end
+            contentpos = newline_pos
+        elseif command == "removelinecursor" then
             local str_start = string.sub(result, 1, contentpos - 1)
             local str_end = string.sub(result, contentpos)
             local pre = string.match(str_start, "^(.*)\n[^\n]*$") or ""
@@ -230,7 +291,7 @@ local function processSnippetOrder(snippet_orders: {{string}}, to_process: strin
             end
             result = string.sub(result, 1, contentpos - 1) .. string.sub(result, contentpos + newline_pos)
         elseif command == "putstring" or command == "putfile" then
-            local content = order[1]
+            local content: string
             if command == "putfile" then
                 local file_path = getAbsolutePath(`./snippets/{order[1]}`)
                 if not fs.isFile(file_path) then
@@ -238,17 +299,19 @@ local function processSnippetOrder(snippet_orders: {{string}}, to_process: strin
                 end
 
                 content = fs.readFile(file_path) .. "\n"
+            else
+                content = if order[1] == CONTENT_VARIABLE then _VARS[order[2]] else order[1]
             end
 
             local content_len = (utf8.len(content) :: number) + 1
-            local str_start = string.sub(result, 1, contentpos - 1)
+            local str_start = string.sub(result, 0, contentpos - 1)
             local str_end = string.sub(result, contentpos)
 
             result = str_start .. content .. str_end
             contentpos = #str_start + content_len
         elseif command == "replaceall" then
             local pattern = regex.new(order[1])
-            result = pattern:replaceAll(result, order[2])
+            result = pattern:replaceAll(result, if order[2] == CONTENT_VARIABLE then _VARS[order[3]] else order[2])
         elseif command == "process" then
             local temp_dir_path = getAbsolutePath("./snippets/_temp")
             if not fs.isDir(temp_dir_path) then
@@ -290,10 +353,10 @@ local function processSnippetOrder(snippet_orders: {{string}}, to_process: strin
                 return error(`Process command failed, log:\n{exec_result.stderr}`, 0)
             end
         else
-            error(`Unknown instruction '{order}' provided!`)
+            error(`Unknown instruction '{command}' provided!`)
         end
     end
-    return result
+    return result, exit_code
 end
 
 local function createBuildVariant(variant: BuildVariant, flags: BuilderFlags)
@@ -304,7 +367,7 @@ local function createBuildVariant(variant: BuildVariant, flags: BuilderFlags)
 
     local variant_id = `{VARIANT_PREFIX}.{variant}`
     local wasm_file = getAbsolutePath(`{WASM_OUTPUT_DIR}/{variant_id}.wasm`)
-    local variant_container = getAbsolutePath(`{BUILD_DIR}/{variant_id}`)
+    local variant_path = getAbsolutePath(`{BUILD_DIR}/{variant_id}`)
 
     if not fs.isFile(wasm_file) then
         return error(`Variant '{variant}' WASM output not found!`)
@@ -317,23 +380,46 @@ local function createBuildVariant(variant: BuildVariant, flags: BuilderFlags)
     end
     print(`Variant '{variant}' got transpiled to luau successfully.`)
 
-    if not fs.isDir(variant_container) then
-        fs.writeDir(variant_container)
-    end
-
-    local processed_runtime = processSnippetOrder(snippet_orders.runtime, wasynth_output, flags)
+    local processed_runtime = processSnippetOrder(snippet_orders.runtime, flags, nil, wasynth_output)
     if not processed_runtime then
         return error(`Failed to process runtime of variant '{variant}'`)
     end
     print(`Successfully processed transpiled runtime of variant '{variant}'!`)
-    fs.writeFile(`{variant_container}/runtime.luau`, processed_runtime)
 
-    local processed_entrypoint = processSnippetOrder(snippet_orders.entrypoint, "", flags)
+    local processed_entrypoint = processSnippetOrder(snippet_orders.entrypoint, flags, nil, "")
     if not processed_entrypoint then
         return error(`Failed to process variant '{variant}'`)
     end
     print(`Successfully processed entrypoint of variant '{variant}'!`)
-    fs.writeFile(`{variant_container}/init.luau`, processed_entrypoint)
+
+    if not table.find(flags, "BUILD_ONEFILE") then
+        local __VARIANT_FILE = `{variant_path}.luau`
+        if fs.isFile(__VARIANT_FILE) then
+            fs.removeFile(__VARIANT_FILE)
+        end
+
+        if not fs.isDir(variant_path) then
+            fs.writeDir(variant_path)
+        end
+
+        fs.writeFile(`{variant_path}/runtime.luau`, processed_runtime)
+        fs.writeFile(`{variant_path}/init.luau`, processed_entrypoint)
+        return
+    end
+
+    local onefile_result = processSnippetOrder(
+        FLAGGED_PATCHES_SNIPPET_ORDER.BUILD_ONEFILE,
+        flags,
+        {
+            LUAUCEPTION_RUNTIME = processed_runtime
+        },
+        processed_entrypoint
+    )
+    if fs.isDir(variant_path) then
+        fs.removeDir(variant_path)
+    end
+
+    fs.writeFile(`{variant_path}.luau`, onefile_result)
     return
 end
 

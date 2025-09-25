@@ -6,7 +6,7 @@
 
   "bundle": {
     "modules_identifier": "__LUAUCEPTION__",
-    "excludes": ["@self/**", "@self/..*", "@lune/**"],
+    "excludes": ["@lune/**"],
 
     "require_mode": {
       "name": "luau",
