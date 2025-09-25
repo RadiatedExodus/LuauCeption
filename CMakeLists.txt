@@ -8,7 +8,7 @@ option(LUAU_BUILD_TESTS "Build tests" OFF)
 option(LUAU_BUILD_WEB "Build Web module" OFF)
 option(LUAU_WERROR "Warnings as errors" OFF)
 option(LUAU_STATIC_CRT "Link with the static CRT (/MT)" OFF)
-option(LUAU_EXTERN_C "Use extern C for all APIs" ON)
+option(LUAU_EXTERN_C "Use extern C for all APIs" OFF)
 add_subdirectory(luau)
 
 # Compiler variant compile & link options
