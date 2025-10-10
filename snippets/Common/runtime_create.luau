@@ -1,9 +1,7 @@
 local runtime_initialize = (require)("@self/runtime")
-
-local polyfill_create = require("./polyfill")
 local utils_create = require("./utils")
 
-return function()
+return function(polyfill_create: typeof(require("./polyfill")))
     local utils, utils_ready = utils_create()
     local polyfill, polyfill_ready = polyfill_create(utils)
 

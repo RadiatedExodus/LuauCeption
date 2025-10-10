@@ -4,7 +4,6 @@ return function(utils: typeof(require("./utils")()))
     local rt, memory_at_0, cfns, INDIRECT_FUNCTIONS
     local polyfill = {}
 
-    local NOW_TIME = os.time() * 1000
     local FILE_MAP = { {}, {} }
     local __TIMERS = {}
     local __EXIT_STATUS = nil
@@ -27,7 +26,13 @@ return function(utils: typeof(require("./utils")()))
         return function(fnIndex: number, ...)
             local stack_ptr = cfns.emscripten_stack_get_current()
             local err, stacktrace = "N/A", "N/A"
-            local success = xpcall(INDIRECT_FUNCTIONS.data[fnIndex], function(_e)err,stacktrace = _e,debug.traceback()end, ...)
+            local success = xpcall(
+                INDIRECT_FUNCTIONS.data[fnIndex],
+                function(_e)
+                    err,stacktrace = _e,debug.traceback()
+                end,
+                ...
+            )
             if success then
                 return
             end
@@ -46,15 +51,11 @@ return function(utils: typeof(require("./utils")()))
 
     function polyfill.__cxa_throw(ptr, type, destructor)
         local info = utils.newCException(type)
-        assert(false, `exception occured in c: {info:_UndecoratedName()} ({info:vfptr()})`)
+        error(`exception occured in c: {info:_UndecoratedName()} ({info:vfptr()})`, 0)
     end
 
     function polyfill._abort_js(reason: any)
-        assert(false, `Aborted({reason})`)
-    end
-
-    function polyfill.emscripten_date_now()
-        return NOW_TIME + os.clock() * 1000
+        error(`Aborted({reason})`, 0)
     end
 
     function polyfill._emscripten_throw_longjmp()
@@ -66,7 +67,7 @@ return function(utils: typeof(require("./utils")()))
     end
 
     function polyfill.emscripten_resize_heap(_requestedSize: number)
-        assert(false, "OOM")
+        error("OOM", 0)
     end
 
     function polyfill._setitimer_js(which, timeoutMs)
@@ -89,79 +90,34 @@ return function(utils: typeof(require("./utils")()))
                 return
             end
 
-            local success, err = pcall(function()
+            local success, result = pcall(function()
                 cfns._emscripten_timeout(which, os.clock())
                 if (__NO_EXIT_RUNTIME or __RUNTIME_KEEPALIVE_COUNTER > 0) then
                     return
                 end
 
-                local exit_success, exit_err = pcall(polyfill.proc_exit, __EXIT_STATUS)
+                local exit_success, exit_result = pcall(polyfill.proc_exit, __EXIT_STATUS)
                 if exit_success then
                     return
                 end
 
-                if (string.match(exit_err, "ExitStatus:") ~= nil or exit_err == "unwind") then
+                if (string.match(exit_result, "ExitStatus:") ~= nil or exit_result == "unwind") then
                     return __EXIT_STATUS
                 end
-                assert(false, exit_err)
+
+                error(exit_result, 0)
             end)
 
             if (not success) then
-                if (string.match(err, "ExitStatus:") ~= nil or err == "unwind") then
+                if (string.match(result, "ExitStatus:") ~= nil or result == "unwind") then
                     return
                 end
-                assert(false, err)
+
+                error(result, 0)
             end
         end, timeoutMs / 1000)
 
         __TIMERS[which] = { thread = thread, timeoutMs = timeoutMs }
-        return 0
-    end
-
-    function polyfill._localtime_js(timer, buf)
-        local tdata = os.date("*t", rt.i64.into_u64(timer))
-
-        --// https://en.cppreference.com/w/cpp/chrono/c/tm
-        rt.store.i32(memory_at_0, buf + 0, tdata.sec) --// int tm_sec
-        rt.store.i32(memory_at_0, buf + 4, tdata.min) --// int tm_min
-        rt.store.i32(memory_at_0, buf + 8, tdata.hour) --// int tm_hour
-        rt.store.i32(memory_at_0, buf + 12, tdata.day) --// int tm_mday
-        rt.store.i32(memory_at_0, buf + 16, tdata.month - 1) --// int tm_mon
-        rt.store.i32(memory_at_0, buf + 20, tdata.year - 1900) --// int tm_year
-        rt.store.i32(memory_at_0, buf + 24, tdata.wday) --// int tm_wday
-        rt.store.i32(memory_at_0, buf + 28, tdata.yday) --// int tm_yday
-        rt.store.i32(memory_at_0, buf + 32, if tdata.isdst then 1 else 0) --// int tm_isdst
-    end
-
-    function polyfill._gmtime_js(timer, buf)
-        local tdata = os.date("!*t", rt.i64.into_u64(timer))
-
-        --// https://en.cppreference.com/w/cpp/chrono/c/tm
-        rt.store.i32(memory_at_0, buf + 0, tdata.sec) --// int tm_sec
-        rt.store.i32(memory_at_0, buf + 4, tdata.min) --// int tm_min
-        rt.store.i32(memory_at_0, buf + 8, tdata.hour) --// int tm_hour
-        rt.store.i32(memory_at_0, buf + 12, tdata.day) --// int tm_mday
-        rt.store.i32(memory_at_0, buf + 16, tdata.month - 1) --// int tm_mon
-        rt.store.i32(memory_at_0, buf + 20, tdata.year - 1900) --// int tm_year
-        rt.store.i32(memory_at_0, buf + 24, tdata.wday) --// int tm_wday
-        rt.store.i32(memory_at_0, buf + 28, tdata.yday) --// int tm_yday
-        rt.store.i32(memory_at_0, buf + 32, if tdata.isdst then 1 else 0) --// int tm_isdst
-    end
-
-    function polyfill.clock_time_get(clock_id: number, ignored_precision: boolean, ptime: number)
-        if not (clock_id >= 0 and clock_id <= 3) then
-            return 28
-        end
-
-        local time_now
-        if clock_id == 0 then
-            time_now = polyfill.emscripten_date_now()
-        elseif true then -- if nowIsMonotonic is 1
-            time_now = os.clock()
-        end
-
-        local nsec = math.round(time_now * 1000 * 1000)
-        rt.store.i64(memory_at_0, ptime, rt.i64.from_u64(nsec))
         return 0
     end
 
@@ -187,7 +143,7 @@ return function(utils: typeof(require("./utils")()))
             __ABORT_WASM = true
         end
 
-        assert(false, `ExitStatus: Program exited with code ${code}`)
+        error(`ExitStatus: Program exited with code ${code}`, 0)
     end
 
     return polyfill, function(_rt: any, _memory_at_0: any, _cfns: any, _INDIRECT_FUNCTIONS: any)
