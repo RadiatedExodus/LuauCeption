@@ -5,10 +5,6 @@ local regex = require("@lune/regex")
 local argparse = require("@self/argparse/src/lib")
 
 local VALID_FLAGS = {
-    -- this workaround is temporary!!!
-    -- see: https://github.com/seaofvoices/darklua/pull/300
-    "EXPERIMENTAL_BUNDLED_MODULES_TYPES_FIX",
-
     -- combines runtime and entrypoint into one file
     "BUILD_ONEFILE",
 }
@@ -100,24 +96,6 @@ local FLAGGED_PATCHES = {
         ["RUNTIME_REPLACEMENT"] = "&RUNTIME&",
         ["ENCAPSULATION_CODE"] = "local __LUAUCEPTION_RUNTIME__ = (function()\n\n&RUNTIME&\nend)()\n",
     },
-    ["DARKLUA"] = {
-        ["IMPORT_PATTERN"] = "__LUAUCEPTION__\\.load\\('([\\w+])'\\)",
-        ["IMPORT_REPLACEMENT"] = "__LUAUCEPTION__[\"$1\"]()",
-        ["IMPORT_LOADER"] = [[
-local __CACHE__LUAUCEPTION__ = {}
-local __LUAUCEPTION__ = setmetatable({}, {
-    __index = function(self, m)
-        if not __CACHE__LUAUCEPTION__[m] then
-            local module = rawget(self, m)()
-            __CACHE__LUAUCEPTION__[m] = function()
-                return module
-            end
-        end
-        return __CACHE__LUAUCEPTION__[m] or rawget(self, m)
-    end
-})
-]],
-    },
 }
 
 local FLAGGED_PATCHES_SNIPPET_ORDER = {
@@ -132,12 +110,6 @@ local FLAGGED_PATCHES_SNIPPET_ORDER = {
         {"goto", "end", FLAGGED_PATCHES.BUILD_ONEFILE.RUNTIME_REPLACEMENT},
         {"removelinecursor"},
         {"putstring", CONTENT_VARIABLE, "LUAUCEPTION_RUNTIME"},
-    },
-    ["DARKLUA_BUNDLER_WORKAROUND"] = {
-        {"goto", "start", "local __LUAUCEPTION__"},
-        {"removelines", 14},
-        {"putstring", FLAGGED_PATCHES.DARKLUA.IMPORT_LOADER},
-        {"replaceall", FLAGGED_PATCHES.DARKLUA.IMPORT_PATTERN, FLAGGED_PATCHES.DARKLUA.IMPORT_REPLACEMENT},
     }
 }
 
@@ -160,9 +132,6 @@ local VARIANT_BUILD_SNIPPET_ORDER: {[string]: VariantSnippetInstructions} = {
             {"putstring", "--!optimize 2\n"},
             {"putstring", createHeaderSnippet("Compiler")},
             {"putstring", "local STUB_WARN = false\n"},
-
-            {"jmpifflag", 1, "EXPERIMENTAL_BUNDLED_MODULES_TYPES_FIX", "undefined"},
-            {"runsnippet", FLAGGED_PATCHES_SNIPPET_ORDER.DARKLUA_BUNDLER_WORKAROUND},
         },
     },
     ["VM"] = {
@@ -183,9 +152,6 @@ local VARIANT_BUILD_SNIPPET_ORDER: {[string]: VariantSnippetInstructions} = {
             {"putstring", "--!optimize 2\n"},
             {"putstring", createHeaderSnippet("VM")},
             {"putstring", "local STUB_WARN = false\n"},
-
-            {"jmpifflag", 1, "EXPERIMENTAL_BUNDLED_MODULES_TYPES_FIX", "undefined"},
-            {"runsnippet", FLAGGED_PATCHES_SNIPPET_ORDER.DARKLUA_BUNDLER_WORKAROUND},
         },
     },
     ["Full"] = {
@@ -206,9 +172,6 @@ local VARIANT_BUILD_SNIPPET_ORDER: {[string]: VariantSnippetInstructions} = {
             {"putstring", "--!optimize 2\n"},
             {"putstring", createHeaderSnippet("Full")},
             {"putstring", "local STUB_WARN = false\n"},
-
-            {"jmpifflag", 1, "EXPERIMENTAL_BUNDLED_MODULES_TYPES_FIX", "undefined"},
-            {"runsnippet", FLAGGED_PATCHES_SNIPPET_ORDER.DARKLUA_BUNDLER_WORKAROUND},
         },
     },
 }
