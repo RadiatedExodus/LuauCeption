@@ -1,0 +1,16 @@
+{
+  "languageMode": "nonstrict",
+  "lint": {
+    "*": true
+  },
+  "lintErrors": false,
+  "typeErrors": true,
+  "globals": [
+    "Vector3",
+    "task"
+  ],
+  "aliases": {
+    "lune": "~/.lune/.typedefs/0.10.3/",
+    "frktest": "./src/tests/frktest/src"
+  }
+}

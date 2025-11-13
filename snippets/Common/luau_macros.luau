@@ -1,27 +1,27 @@
-local macros do
-    local LUAI_MAXCSTACK    = 8000
-    local LUA_REGISTRYINDEX = -LUAI_MAXCSTACK - 2000
-    local LUA_ENVIRONINDEX  = -LUAI_MAXCSTACK - 2001
-    local LUA_GLOBALSINDEX  = -LUAI_MAXCSTACK - 2002
-    local LUA_VECTOR_SIZE   = 3
+local LUAI_MAXCSTACK    = 8000
+local LUA_REGISTRYINDEX = -LUAI_MAXCSTACK - 2000
+local LUA_ENVIRONINDEX  = -LUAI_MAXCSTACK - 2001
+local LUA_GLOBALSINDEX  = -LUAI_MAXCSTACK - 2002
+local LUA_VECTOR_SIZE   = 3
 
-    local LUA_TNIL           = 0
-    local LUA_TBOOLEAN       = 1
-    local LUA_TLIGHTUSERDATA = 2
-    local LUA_TNUMBER        = 3
-    local LUA_TVECTOR        = 4
-    local LUA_TSTRING        = 5
-    local LUA_TTABLE         = 6
-    local LUA_TFUNCTION      = 7
-    local LUA_TUSERDATA      = 8
-    local LUA_TTHREAD        = 9
-    local LUA_TBUFFER        = 10
-    local LUA_TPROTO         = 11
-    local LUA_TUPVAL         = 12
-    local LUA_TDEADKEY       = 13
-    local LUA_T_COUNT        = LUA_TPROTO
+local LUA_TNIL           = 0
+local LUA_TBOOLEAN       = 1
+local LUA_TLIGHTUSERDATA = 2
+local LUA_TNUMBER        = 3
+local LUA_TVECTOR        = 4
+local LUA_TSTRING        = 5
+local LUA_TTABLE         = 6
+local LUA_TFUNCTION      = 7
+local LUA_TUSERDATA      = 8
+local LUA_TTHREAD        = 9
+local LUA_TBUFFER        = 10
+local LUA_TPROTO         = 11
+local LUA_TUPVAL         = 12
+local LUA_TDEADKEY       = 13
+local LUA_T_COUNT        = LUA_TPROTO
 
-    macros = {
+return function(rt: any, memory_at_0: any, cfns: any, INDIRECT_FUNCTIONS: any)
+    return {
         LUA_TNIL           = LUA_TNIL,
         LUA_TBOOLEAN       = LUA_TBOOLEAN,
         LUA_TLIGHTUSERDATA = LUA_TLIGHTUSERDATA,

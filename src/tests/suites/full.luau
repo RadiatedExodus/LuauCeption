@@ -5,7 +5,7 @@ local req = frktest.assert.require
 local msg = frktest.assert.msg
 
 test.suite("Full", function()
-    local Full = require("../../../build/Luau.LuauCeption.Full")
+    local Full = require("../../../output/Luau.LuauCeption.Full")
     for opt = 0, 2 do
         for dbg = 0, 2 do
             for typInf = 0, 2 do
@@ -49,6 +49,26 @@ test.suite("Full", function()
             end
         end
     end
+
+    test.case("should be able to handle longjmp", function()
+        local bc = Full.luau_compile([[
+            local function main()
+                error("longjmp test kaboom")
+            end
+            
+            print(pcall(main))
+        ]], 1, 2, 2)
+
+        check.should_not_error(function()
+            Full.luau_run(bc, "LuauCeptionTest_LongJMP_Handling_NSF", false)
+            return
+        end)
+
+        check.should_not_error(function()
+            Full.luau_run(bc, "LuauCeptionTest_LongJMP_Handling_WSF", true)
+            return
+        end)
+    end)
 end)
 
 return true

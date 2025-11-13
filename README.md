@@ -9,7 +9,7 @@ LuauCeption uses [lune](https://github.com/lune-org/lune) (runtime) and [frktest
 
 To run tests, ensure you've initialized submodules (as the frktest library is imported using submodules) and simply run the ``run.luau`` script with lune.
 
-The old testing script (``Test.luau``) at ``utils`` is still available, however it won't be used or updated for newer work.
+The old testing script (``Test.luau``) at ``utils/_helpers`` is still available, however it won't be used or updated for newer work.
 
 ## Special thanks
 - [@Rerumu](https://github.com/Rerumu) - a LOT of troubleshooting
