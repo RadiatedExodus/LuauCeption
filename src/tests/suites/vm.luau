@@ -12,7 +12,12 @@ test.suite("VM", function()
             for typInf = 0, 2 do
                 for cov = 0, 2 do
                     test.case(`should be able to run valid Luau code without erroring with opt {opt} dbg {dbg} typInf {typInf} cov {cov}`, function()
-                        local bc, bcs = Compiler.luau_compile(`print("Hello world!")\nprint({opt},{dbg},{typInf},{cov})`, opt, dbg, typInf, cov)
+                        local bc, bcs = Compiler.luau_compile(`print("Hello world!")\nprint({opt},{dbg},{typInf},{cov})`, {
+                            OptimizationLevel = opt,
+                            DebugLevel = dbg,
+                            TypeInfoLevel = typInf,
+                            CoverageLevel = cov
+                        })
 
                         msg(`no safe env, bcs: {bcs}`)
                         check.should_not_error(function()
@@ -38,7 +43,12 @@ test.suite("VM", function()
             end
             
             print(pcall(main))
-        ]], 1, 2, 2)
+        ]], {
+            OptimizationLevel = 1,
+            DebugLevel = 1,
+            TypeInfoLevel = 1,
+            CoverageLevel = 0
+        })
 
         check.should_not_error(function()
             VM.luau_run(bc, "LuauCeptionTest_LongJMP_Handling_NSF", false)
