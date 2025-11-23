@@ -4,6 +4,7 @@ local LUA_ENVIRONINDEX  = -LUAI_MAXCSTACK - 2001
 local LUA_GLOBALSINDEX  = -LUAI_MAXCSTACK - 2002
 local LUA_VECTOR_SIZE   = 3
 
+local LUA_TNONE          = -1
 local LUA_TNIL           = 0
 local LUA_TBOOLEAN       = 1
 local LUA_TLIGHTUSERDATA = 2
@@ -20,7 +21,7 @@ local LUA_TUPVAL         = 12
 local LUA_TDEADKEY       = 13
 local LUA_T_COUNT        = LUA_TPROTO
 
-return function(rt: any, memory_at_0: any, cfns: any, INDIRECT_FUNCTIONS: any)
+return function(rt: any, memory_at_0: any, cfns: any, INDIRECT_FUNCTIONS: any, utils: typeof(require("../Common/utils")()))
     return {
         LUA_TNIL           = LUA_TNIL,
         LUA_TBOOLEAN       = LUA_TBOOLEAN,
@@ -98,8 +99,8 @@ return function(rt: any, memory_at_0: any, cfns: any, INDIRECT_FUNCTIONS: any)
         lua_upvalueindex      = function(i)                      return LUA_GLOBALSINDEX - i end,
         lua_ispseudo          = function(i)                      return if (i <= LUA_REGISTRYINDEX) then 1 else 0 end,
         lua_getref            = function(L, ref)                 return cfns.lua_rawgeti(L, LUA_REGISTRYINDEX, ref) end,
-        lua_tonumberx         = function(L, i)                   return cfns.lua_tonumberx(L, i, 0) end,
-        lua_tointegerx        = function(L, i)                   return cfns.lua_tointegerx(L, i, 0) end,
+        lua_tonumber          = function(L, i)                   return cfns.lua_tonumberx(L, i, 0) end,
+        lua_tointeger         = function(L, i)                   return cfns.lua_tointegerx(L, i, 0) end,
         lua_tounsigned        = function(L, i)                   return cfns.lua_tounsignedx(L, i, 0) end,
         lua_pop               = function(L, n)                   return cfns.lua_settop(L, -n - 1) end,
         lua_newtable          = function(L)                      return cfns.lua_createtable(L, 0, 0) end,
@@ -115,10 +116,12 @@ return function(rt: any, memory_at_0: any, cfns: any, INDIRECT_FUNCTIONS: any)
         lua_isbuffer          = function(L, n)                   return if (cfns.lua_type(L, (n)) == LUA_TBUFFER) then 1 else 0 end,
         lua_isnone            = function(L, n)                   return if (cfns.lua_type(L, (n)) == LUA_TNONE) then 1 else 0 end,
         lua_isnoneornil       = function(L, n)                   return if (cfns.lua_type(L, (n)) <= LUA_TNIL) then 1 else 0 end,
-        --// lua_pushliteral  = function(L, s)                   return cfns.lua_pushlstring(L, cstr(""), (sizeof(s) / sizeof(char)) - 1) end, --// sizeof needed, not sure atm
+        lua_pushliteral       = function(L, s)                   return cfns.lua_pushlstring(L, utils.cstr(""), (#s / 1 --[[sizeof(char)]]) - 1) end,
         lua_pushcfunction     = function(L, fn, debugname)       return cfns.lua_pushcclosurek(L, fn, debugname, 0, 0) end,
         lua_pushcclosure      = function(L, fn, debugname, nup)  return cfns.lua_pushcclosurek(L, fn, debugname, nup, 0) end,
         lua_pushlightuserdata = function(L, p)                   return cfns.lua_pushlightuserdatatagged(L, p, 0) end,
+        lua_rawgetp           = function(L, idx, p)              return cfns.lua_rawgetptagged(L, idx, p, 0) end,
+        lua_rawsetp           = function(L, idx, p)              return cfns.lua_rawsetptagged(L, idx, p, 0) end,
         lua_setglobal         = function(L, s)                   return cfns.lua_setfield(L, LUA_GLOBALSINDEX, s) end,
         lua_getglobal         = function(L, s)                   return cfns.lua_getfield(L, LUA_GLOBALSINDEX, s) end,
         lua_tostring          = function(L, i)                   return cfns.lua_tolstring(L, i, 0) end,
@@ -128,8 +131,8 @@ return function(rt: any, memory_at_0: any, cfns: any, INDIRECT_FUNCTIONS: any)
         luaL_argerror         = function(L, narg, extramsg)      return cfns.luaL_argerrorL(L, narg, extramsg) end,
         luaL_argcheck         = function(L, cond, arg, extramsg) return if cond == 1 then 0 else cfns.luaL_argerror(L, arg, extramsg) end,
         luaL_argexpected      = function(L, cond, arg, tname)    return if cond == 1 then 0 else cfns.luaL_typeerror(L, arg, tname) end,
-        luaL_checkstring      = function(L, n)                   return cfns.luaL_checklstring(L, n, NULL) end,
-        luaL_optstring        = function(L, n, d)                return cfns.luaL_optlstring(L, n, d, NULL) end,
+        luaL_checkstring      = function(L, n)                   return cfns.luaL_checklstring(L, n, 0) end,
+        luaL_optstring        = function(L, n, d)                return cfns.luaL_optlstring(L, n, d, 0) end,
         luaL_getmetatable     = function(L, n)                   return cfns.lua_getfield(L, LUA_REGISTRYINDEX, n) end,
         --// luaL_opt         = function(L, f, n, d)             return if (lua_isnoneornil(L, n) == 1) then d else f(L, n) end,
         --// luaL_addchar     = function(B, c)                   return ((void)((B)->p < (B)->end || luaL_prepbuffsize(B, 1)), (*(B)->p++ = (char)(c))) end,
