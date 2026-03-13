@@ -11,6 +11,10 @@ To run tests, ensure you've initialized submodules (as the frktest library is im
 
 The old testing script (``Test.luau``) at ``utils/_helpers`` is still available, however it won't be used or updated for newer work.
 
+# Development Setup
+* Make sure to install [Rokit](https://github.com/rojo-rbx/rokit) and [emscripten](https://emscripten.org) >5.0.2
+* Also install [Wasynth](https://github.com/Rerumu/Wasynth) from compiled releases and put in `./utils` directory
+
 ## Special thanks
 - [@Rerumu](https://github.com/Rerumu) - a LOT of troubleshooting
 - Tryptamine (@Lemonchat) - C exception handling
