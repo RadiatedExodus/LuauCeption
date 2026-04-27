@@ -1,3 +1,2 @@
 build/*
 output/*
-utils/wasm2luau
