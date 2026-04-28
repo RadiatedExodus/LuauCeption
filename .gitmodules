@@ -1,6 +1,9 @@
-[submodule "src/builder/argparse"]
-	path = src/builder/argparse
-	url = https://github.com/CavefulGames/argparse-lune
-[submodule "src/tests/frktest"]
-	path = src/tests/frktest
-	url = https://github.com/itsfrank/frktest
+[submodule "extern/luau"]
+	path = extern/luau
+	url = https://github.com/luau-lang/luau.git
+[submodule "extern/argparse"]
+	path = extern/argparse
+	url = https://github.com/CavefulGames/argparse-lune.git
+[submodule "extern/frktest"]
+	path = extern/frktest
+	url = https://github.com/itsfrank/frktest.git
