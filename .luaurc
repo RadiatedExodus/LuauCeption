@@ -1,0 +1,11 @@
+{
+	"languageMode": "strict",
+	"lint": { "*": true },
+	"lintErrors": false,
+	"globals": ["task"],
+	"aliases": {
+		"lune": "~/.lune/.typedefs/0.10.4/",
+		"argparse": "./extern/argparse/src/",
+		"frktest": "./extern/frktest/src/"
+	}
+}
