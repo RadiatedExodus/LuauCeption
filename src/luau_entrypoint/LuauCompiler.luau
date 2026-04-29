@@ -2,6 +2,7 @@
 local WasmModule      = require("./WasmModuleType")
 local HelperInit      = require("./Helper")
 local ImportTableInit = require("./ImportTable")
+local SpiderRuntime   = require("./SpiderRuntime")
 
 local LuauCompiler = {}
 LuauCompiler.__index = LuauCompiler
@@ -100,6 +101,56 @@ function LuauCompiler.ConstructCompileOptions(self: LuauCompiler, options: LuauC
     return ptr, freeCompileOptions
 end
 
+function LuauCompiler.SetCompileConstantNil(self: LuauCompiler, constant: number)
+    self.WASM.luau_set_compile_constant_nil(constant)
+    return
+end
+
+function LuauCompiler.SetCompileConstantBoolean(self: LuauCompiler, constant: number, b: boolean)
+    self.WASM.luau_set_compile_constant_boolean(constant, b)
+    return
+end
+
+function LuauCompiler.SetCompileConstantNumber(self: LuauCompiler, constant: number, n: number)
+    local nPtr = self.WASM.malloc(8)
+    buffer.writef64(self.Memory, nPtr, n)
+    self.WASM.luau_set_compile_constant_number(constant, nPtr)
+    self.WASM.free(nPtr)
+    return
+end
+
+function LuauCompiler.SetCompileConstantInteger64(self: LuauCompiler, constant: number, l: number)
+    local lPtr = self.WASM.malloc(8)
+    SpiderRuntime.rt_store_i64(self.WASM.memory, lPtr, l)
+    self.WASM.luau_set_compile_constant_integer64(constant, lPtr)
+    self.WASM.free(lPtr)
+    return
+end
+
+function LuauCompiler.SetCompileConstantVector(self: LuauCompiler, constant: number, x: number, y: number, z: number, w: number)
+    local xPtr = self.WASM.malloc(4)
+    local yPtr = self.WASM.malloc(4)
+    local zPtr = self.WASM.malloc(4)
+    local wPtr = self.WASM.malloc(4)
+    buffer.writef32(self.Memory, xPtr, x)
+    buffer.writef32(self.Memory, yPtr, y)
+    buffer.writef32(self.Memory, zPtr, z)
+    buffer.writef32(self.Memory, wPtr, w)
+    self.WASM.luau_set_compile_constant_vector(constant, xPtr, yPtr, zPtr, wPtr)
+    self.WASM.free(xPtr)
+    self.WASM.free(yPtr)
+    self.WASM.free(zPtr)
+    self.WASM.free(wPtr)
+    return
+end
+
+function LuauCompiler.SetCompileConstantString(self: LuauCompiler, constant: number, s: string)
+    local sPtr = self.Helper.CreateString(s)
+    self.WASM.luau_set_compile_constant_integer64(constant, sPtr, #s)
+    self.WASM.free(sPtr)
+    return
+end
+
 return {
     new = function(): LuauCompiler
         local importOk: boolean, init: (any) -> (WasmModule.WasmModule) = pcall(require, "./CompilerModule")
@@ -108,16 +159,13 @@ return {
         --// import table proxy
         --// since we can't access memory before init, we have to
         --// proxy them (init has assertions for checking missing imports)
-        local importTable = {} :: {[string]: (...any) -> (...any)}
-        local proxyTable  = setmetatable({}, { __index = function(_, n: string) return function(...) return importTable[n](...) end end })
+        local importTable: {[string]: (...any) -> (...any)}
+        local proxyTable  = setmetatable({}, { __index = function(_, n: string) return function(...) assert(importTable[n], `BUG: import '{n}' does not exist`); return importTable[n](...) end end })
         local module = init({ env = proxyTable, wasi_snapshot_preview1 = proxyTable })
 
         --// initialize our stuff
-        local helper          = HelperInit(module)
-        local realImportTable = ImportTableInit(module, helper)
-        for name: string, fn: (...any) -> (...any) in realImportTable :: any do
-            importTable[name] = fn
-        end
+        local helper = HelperInit(module)
+        importTable  = ImportTableInit(module, helper)
 
         return setmetatable({
             WASM        = module,
