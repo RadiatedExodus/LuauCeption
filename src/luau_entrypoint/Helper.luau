@@ -1,11 +1,13 @@
 --!strict
-return function(module: {[any]: any})
+local WasmModuleType = require("./WasmModuleType")
+
+return function(module: WasmModuleType.WasmModule)
     local ljmp_sign = newproxy(false)
     local memory    = module.memory[1]                 :: buffer
-    local functions = module                           :: {[string]: (...any) -> (...any)}
+    local functions = module                           :: WasmModuleType.WasmModule
     local ift       = module.__indirect_function_table :: {[number]: (...any) -> (...any)}
 
-    local function CreateString(str): number
+    local function CreateString(str: string): number
         local strPtr = functions.malloc(#str + 1)
         buffer.writestring(memory, strPtr, str)
         buffer.writei8(memory, strPtr + #str, 0)
@@ -36,7 +38,7 @@ return function(module: {[any]: any})
         end
     end
 
-    local function CreateInvoke()
+    local function CreateInvoke(): (number, ...any) -> ()
         return function(index: number, ...)
             local stackPtr   = functions.emscripten_stack_get_current()
             local errorWasm  = "N/A"
@@ -61,7 +63,7 @@ return function(module: {[any]: any})
         return
     end
 
-    local function InjectFunction(f)
+    local function InjectFunction(f: (...any) -> (...any)): number
         local ptr = #ift + 1
         ift[ptr] = f
         return ptr
@@ -74,6 +76,14 @@ return function(module: {[any]: any})
         return nil
     end
 
+    local function ExtractZone(timezoneOffset: number): string
+    local sign      = if (timezoneOffset >= 0) then "-" else "+"
+    local absOffset = math.abs(timezoneOffset)
+    local hours     = string.format("%02d", math.floor(absOffset / 60))
+    local minutes   = string.format("%02d", absOffset % 60)
+    return `UTC{sign}{hours}{minutes}`
+end
+
     return {
         CreateString      = CreateString,
         CreateStringArray = CreateStringArray,
@@ -82,6 +92,7 @@ return function(module: {[any]: any})
         FreeStringArray   = FreeStringArray,
         InjectFunction    = InjectFunction,
         GetTaskLibrary    = GetTaskLibrary,
+        ExtractZone       = ExtractZone,
         LJMPThrowObject   = ljmp_sign,
     }
 end
