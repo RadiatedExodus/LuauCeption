@@ -23,6 +23,7 @@ local function GitGetCommit(cwd: string?): string
 end
 
 --// Spider
+--// TODO: Runtime dumper function (runtime dump option not on stable branch yet!)
 local function RunSpider(wasmFile: string): string
     local result = process.exec("spider-cli", {
         "--optimize",
@@ -34,40 +35,93 @@ local function RunSpider(wasmFile: string): string
     return result.stdout
 end
 
+--// Filesystem
+local function CheckFileReadable(path: string)
+    local asuccess, exists = pcall(fs.isFile, path)
+    local bsuccess, readOk = pcall(fs.readFile, path)
+    assert(asuccess and exists, `file '{path}' doesn't exist`)
+    assert(bsuccess and readOk, `file '{path}' is unreadable`)
+    return
+end
+
+local function ReadFileConditional(path: string, condition: boolean): string?
+    if (not condition) then return nil end
+    local asuccess, exists = pcall(fs.isFile, path)
+    local bsuccess, readOk = pcall(fs.readFile, path)
+    assert(asuccess and exists, `file '{path}' doesn't exist`)
+    assert(bsuccess and readOk, `file '{path}' is unreadable`)
+    return readOk
+end
+
+local function PathShouldEndInSlash(path: string): string
+    if (string.sub(path, #path, #path) ~= "/") then
+        return `{path}/`
+    end
+    return path
+end
+
 --// check if we're running in the root of the repository
 local cwdCheckOk, cwdResult = pcall(fs.isDir, "./src")
 assert(cwdCheckOk and cwdResult, `please run the builder from the root of the repository`)
 
 --// argparse
 local parserCmdLine = argparse("src/builder", "LuauCeption Builder Script")
-parserCmdLine:option("-f --file", "Path to WebAssembly file")
-parserCmdLine:option("-t --type", "Type of the module (compiler, vm)")
+parserCmdLine:option("-cm --compiler-module",  "Path to Luau.LuauCeption.Compiler WebAssembly file")
+parserCmdLine:option("-vm --vm-module",        "Path to Luau.LuauCeption.VM WebAssembly file")
+parserCmdLine:option("-vc --vector-compat",    "Controls if vector compat is enabled or not (true/false)")
+parserCmdLine:option("-of --output-folder",    "The path where the 'built' LuauCeption module will be put at")
 local args = parserCmdLine:parse(process.args)
 
---// argument checks
-local wasmModuleCheckOk, wasmModuleCheckResult = pcall(fs.isFile, args["file"])
-assert(wasmModuleCheckOk and wasmModuleCheckResult, `specified webassembly module '{args["file"]}' is not a file or unreadable`)
-assert((string.lower(args["type"]) == "compiler") or (string.lower(args["type"]) == "vm"), "module type must be 'vm' or 'compiler'")
-
 --// constants
-local WASM_MODULE_PATH  = args["file"]
-local MODULE_TYPE       = string.lower(args["type"]) :: "compiler" | "vm"
-local LUAU_GIT_TAG      = GitGetTag("./extern/luau/")
-local LUAU_GIT_COMMIT   = GitGetCommit("./extern/luau/")
-local VECTOR_COMPAT     = fs.readFile("./src/builder/VectorCompat.luau")
+local COMPILER_WASM_MODULE  = args["compiler_module"]
+local VM_WASM_MODULE        = args["vm_module"]
+local OUTPUT_FOLDER_PATH    = PathShouldEndInSlash(args["output_folder"])
+local LUAU_GIT_TAG          = GitGetTag("./extern/luau/")
+local LUAU_GIT_COMMIT       = GitGetCommit("./extern/luau/")
+local VECTOR_COMPAT_ENABLED = string.lower(args["vector_compat"]) == "true"
+local VECTOR_COMPAT         = ReadFileConditional("./src/builder/VectorCompat.luau", VECTOR_COMPAT_ENABLED) or ""
 
---// transpile using spider
---// TODO: convert this to function for reusability
---// TODO: add argument to exclude adding vector compat
-local transpiledModuleStrings = {} :: {string}
-table.insert(transpiledModuleStrings, "--!nocheck")
-table.insert(transpiledModuleStrings, `--// LuauCeption - module: {MODULE_TYPE}`)
-table.insert(transpiledModuleStrings, `--// Luau {LUAU_GIT_TAG} ({LUAU_GIT_COMMIT})`)
-table.insert(transpiledModuleStrings, VECTOR_COMPAT)
-table.insert(transpiledModuleStrings, RunSpider(WASM_MODULE_PATH))
-table.insert(transpiledModuleStrings, "return module")
+--// module processing
+--// put down here because they need constants
+local function ProcessModule(type: "compiler" | "vm", path: string): string
+    local transpiledModuleStrings = {} :: {string}
+    table.insert(transpiledModuleStrings, "--!nocheck")
+    table.insert(transpiledModuleStrings, `--// LuauCeption - module: {type}`)
+    table.insert(transpiledModuleStrings, `--// Luau {LUAU_GIT_TAG} ({LUAU_GIT_COMMIT})`)
+    table.insert(transpiledModuleStrings, VECTOR_COMPAT)
+    table.insert(transpiledModuleStrings, RunSpider(path))
+    table.insert(transpiledModuleStrings, "return module")
+    return table.concat(transpiledModuleStrings, "\n")
+end
 
---// TODO: argument to specify where to output the "built file structure"
---// TODO: remove -t argument and replace it with --compiler-module (-cm) and --vm-module (-vm)
---// TODO: output found luau tag and version to stdout
-fs.writeFile("./src/luau_entrypoint/CompilerModule.luau", table.concat(transpiledModuleStrings, "\n"))
+--// file check
+CheckFileReadable(COMPILER_WASM_MODULE)
+CheckFileReadable(VM_WASM_MODULE)
+
+--// some logging
+print("LuauCeption Builder")
+print(`  Luau version detected: {LUAU_GIT_TAG} ({LUAU_GIT_COMMIT})`)
+print(`  Vector compat enabled: {VECTOR_COMPAT_ENABLED}`)
+print(`  Compiler module path:  {COMPILER_WASM_MODULE}`)
+print(`  VM module path:        {VM_WASM_MODULE}`)
+print(`  Output folder path:    {OUTPUT_FOLDER_PATH}`)
+
+--// setup output folder
+if (not fs.isDir(OUTPUT_FOLDER_PATH)) then
+    fs.writeDir(OUTPUT_FOLDER_PATH)
+end
+
+--// copy over luau entrypoint files from src
+for _, fileName in fs.readDir("./src/luau_entrypoint/") do
+    print(`Found luau entrypoint file/folder -> {fileName}`)
+    fs.copy(`./src/luau_entrypoint/{fileName}`, `{OUTPUT_FOLDER_PATH}{fileName}`, true)
+end
+
+--// processing
+print("Processing compiler module")
+fs.writeFile(`{OUTPUT_FOLDER_PATH}CompilerModule.luau`, ProcessModule("compiler", COMPILER_WASM_MODULE))
+print("Processing VM module")
+fs.writeFile(`{OUTPUT_FOLDER_PATH}VMModule.luau`, ProcessModule("vm", VM_WASM_MODULE))
+
+--// ok
+print("Build OK")
