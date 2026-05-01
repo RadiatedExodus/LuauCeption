@@ -1,4 +1,5 @@
 --!strict
+local SpiderRuntime = require("../../output/SpiderRuntime")
 local WasmModuleType = require("./WasmModuleType")
 
 return function(module: WasmModuleType.WasmModule)
@@ -28,6 +29,14 @@ return function(module: WasmModuleType.WasmModule)
         end
 
         buffer.writei32(memory, arrayPtr + (arrayLength * 4), 0)
+        return arrayPtr
+    end
+
+    local function CreateVectorFloatArray(array: {number}): number
+        local arrayPtr = functions.malloc(12)
+        SpiderRuntime.rt_store_f32(module.memory, arrayPtr,     array[1])
+        SpiderRuntime.rt_store_f32(module.memory, arrayPtr + 4, array[2])
+        SpiderRuntime.rt_store_f32(module.memory, arrayPtr + 8, array[3])
         return arrayPtr
     end
 
@@ -63,6 +72,14 @@ return function(module: WasmModuleType.WasmModule)
         return
     end
 
+    local function ReadVectorFloatArray(arrayPtr: number): {number}
+        return {
+            SpiderRuntime.rt_load_f32(module.memory, arrayPtr),
+            SpiderRuntime.rt_load_f32(module.memory, arrayPtr + 4),
+            SpiderRuntime.rt_load_f32(module.memory, arrayPtr + 8),
+        }
+    end
+
     local function InjectFunction(f: (...any) -> (...any)): number
         local ptr = #ift + 1
         ift[ptr] = f
@@ -85,14 +102,16 @@ return function(module: WasmModuleType.WasmModule)
 end
 
     return {
-        CreateString      = CreateString,
-        CreateStringArray = CreateStringArray,
-        CreateStub        = CreateStub,
-        CreateInvoke      = CreateInvoke,
-        FreeStringArray   = FreeStringArray,
-        InjectFunction    = InjectFunction,
-        GetTaskLibrary    = GetTaskLibrary,
-        ExtractZone       = ExtractZone,
-        LJMPThrowObject   = ljmp_sign,
+        CreateString           = CreateString,
+        CreateStringArray      = CreateStringArray,
+        CreateVectorFloatArray = CreateVectorFloatArray,
+        CreateStub             = CreateStub,
+        CreateInvoke           = CreateInvoke,
+        FreeStringArray        = FreeStringArray,
+        ReadVectorFloatArray   = ReadVectorFloatArray,
+        InjectFunction         = InjectFunction,
+        GetTaskLibrary         = GetTaskLibrary,
+        ExtractZone            = ExtractZone,
+        LJMPThrowObject        = ljmp_sign,
     }
 end
