@@ -14,8 +14,8 @@ add_subdirectory(extern/luau)
 
 # luau processor configuration
 set(EMSCRIPTEN_EXPORT "extern \"C\" __attribute__((used))")
-target_compile_definitions(Luau.Compiler PUBLIC LUA_USE_LONGJMP=1 LUACODE_API=${EMSCRIPTEN_EXPORT} LUACODEGEN_API=${EMSCRIPTEN_EXPORT})
-target_compile_definitions(Luau.VM PUBLIC LUA_USE_LONGJMP=1 LUA_API=${EMSCRIPTEN_EXPORT})
+target_compile_definitions(Luau.Compiler PUBLIC LUA_USE_LONGJMP=1 LUA_VECTOR_SIZE=3 LUACODE_API=${EMSCRIPTEN_EXPORT} LUACODEGEN_API=${EMSCRIPTEN_EXPORT})
+target_compile_definitions(Luau.VM PUBLIC LUA_USE_LONGJMP=1 LUA_VECTOR_SIZE=3 LUA_API=${EMSCRIPTEN_EXPORT})
 
 # compiler and linker flags
 set(LUAUCEPTION_CC_OPTS)
