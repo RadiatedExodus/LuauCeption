@@ -1,4 +1,5 @@
 build/*
 output/*
 src/luau_entrypoint/Modules/*
+*.rbxm
 run.luau
