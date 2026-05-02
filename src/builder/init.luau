@@ -100,21 +100,30 @@ print(`  Output folder path:    {OUTPUT_FOLDER_PATH}`)
 --// setup output folder
 if (not fs.isDir(OUTPUT_FOLDER_PATH)) then
     fs.writeDir(OUTPUT_FOLDER_PATH)
+else
+    fs.removeDir(OUTPUT_FOLDER_PATH)
+    fs.writeDir(OUTPUT_FOLDER_PATH)
+end
+
+--// modules dir
+if (not fs.isDir(`{OUTPUT_FOLDER_PATH}Modules`)) then
+    fs.writeDir(`{OUTPUT_FOLDER_PATH}Modules`)
 end
 
 --// copy over luau entrypoint files from src
 for _, fileName in fs.readDir("./src/luau_entrypoint/") do
+    if (fileName == "Modules") then continue end
     print(`Found luau entrypoint file/folder -> {fileName}`)
     fs.copy(`./src/luau_entrypoint/{fileName}`, `{OUTPUT_FOLDER_PATH}{fileName}`, true)
 end
 
 --// processing
 print("Processing compiler module")
-fs.writeFile(`{OUTPUT_FOLDER_PATH}CompilerModule.luau`, ProcessModule("compiler", COMPILER_WASM_MODULE))
+fs.writeFile(`{OUTPUT_FOLDER_PATH}Modules/CompilerModule.luau`, ProcessModule("compiler", COMPILER_WASM_MODULE))
 print("Processing VM module")
-fs.writeFile(`{OUTPUT_FOLDER_PATH}VMModule.luau`, ProcessModule("vm", VM_WASM_MODULE))
+fs.writeFile(`{OUTPUT_FOLDER_PATH}Modules/VMModule.luau`, ProcessModule("vm", VM_WASM_MODULE))
 print("Processing analysis module")
-fs.writeFile(`{OUTPUT_FOLDER_PATH}AnalysisModule.luau`, ProcessModule("analysis", ANALYSIS_WASM_MODULE))
+fs.writeFile(`{OUTPUT_FOLDER_PATH}Modules/AnalysisModule.luau`, ProcessModule("analysis", ANALYSIS_WASM_MODULE))
 
 --// ok
 print("Build OK")

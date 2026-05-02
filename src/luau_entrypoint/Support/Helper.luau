@@ -1,5 +1,5 @@
 --!strict
-local SpiderRuntime = require("../../output/SpiderRuntime")
+local SpiderRuntime  = require("./SpiderRuntime")
 local WasmModuleType = require("./WasmModuleType")
 
 return function(module: WasmModuleType.WasmModule)

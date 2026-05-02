@@ -1,7 +1,7 @@
 --!strict
-local WasmModule      = require("./WasmModuleType")
-local HelperInit      = require("./Helper")
-local ImportTableInit = require("./ImportTable")
+local WasmModule      = require("./Support/WasmModuleType")
+local HelperInit      = require("./Support/Helper")
+local ImportTableInit = require("./Support/ImportTable")
 
 local LuauAnalysis = {}
 LuauAnalysis.__index = LuauAnalysis
@@ -91,7 +91,7 @@ end
 
 return {
     new = function(): LuauAnalysis
-        local importOk: boolean, init: (any) -> (WasmModule.WasmModule) = pcall(require, "./AnalysisModule")
+        local importOk: boolean, init: (any) -> (WasmModule.WasmModule) = pcall(require, "./Modules/AnalysisModule")
         assert(importOk, `failed to import webassembly module: {init}`)
 
         --// import table proxy

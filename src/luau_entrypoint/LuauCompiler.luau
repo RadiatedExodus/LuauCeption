@@ -1,8 +1,8 @@
 --!strict
-local WasmModule      = require("./WasmModuleType")
-local HelperInit      = require("./Helper")
-local ImportTableInit = require("./ImportTable")
-local SpiderRuntime   = require("./SpiderRuntime")
+local WasmModule      = require("./Support/WasmModuleType")
+local HelperInit      = require("./Support/Helper")
+local ImportTableInit = require("./Support/ImportTable")
+local SpiderRuntime   = require("./Support/SpiderRuntime")
 
 local LuauCompiler = {}
 LuauCompiler.__index = LuauCompiler
@@ -153,7 +153,7 @@ end
 
 return {
     new = function(): LuauCompiler
-        local importOk: boolean, init: (any) -> (WasmModule.WasmModule) = pcall(require, "./CompilerModule")
+        local importOk: boolean, init: (any) -> (WasmModule.WasmModule) = pcall(require, "./Modules/CompilerModule")
         assert(importOk, `failed to import webassembly module: {init}`)
 
         --// import table proxy
