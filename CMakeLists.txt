@@ -16,6 +16,7 @@ add_subdirectory(extern/luau)
 set(EMSCRIPTEN_EXPORT "extern \"C\" __attribute__((used))")
 target_compile_definitions(Luau.Compiler PUBLIC LUA_USE_LONGJMP=1 LUA_VECTOR_SIZE=3 LUACODE_API=${EMSCRIPTEN_EXPORT} LUACODEGEN_API=${EMSCRIPTEN_EXPORT})
 target_compile_definitions(Luau.VM PUBLIC LUA_USE_LONGJMP=1 LUA_VECTOR_SIZE=3 LUA_API=${EMSCRIPTEN_EXPORT})
+target_compile_definitions(Luau.Analysis PUBLIC LUA_USE_LONGJMP=1 LUA_VECTOR_SIZE=3)
 
 # compiler and linker flags
 set(LUAUCEPTION_CC_OPTS)
@@ -40,3 +41,12 @@ target_compile_features(Luau.LuauCeption.VM PUBLIC cxx_std_17)
 target_compile_definitions(Luau.LuauCeption.VM PUBLIC LUAUCEPTION_API=${EMSCRIPTEN_EXPORT})
 target_compile_options(Luau.LuauCeption.VM PUBLIC ${LUAUCEPTION_CC_OPTS})
 target_link_options(Luau.LuauCeption.VM PUBLIC ${LUAUCEPTION_LN_OPTS})
+
+# analysis
+add_executable(Luau.LuauCeption.Analysis)
+target_sources(Luau.LuauCeption.Analysis PRIVATE src/glue/entrypoint_analysis.cpp src/glue/flags.cpp src/glue/flags.h src/glue/file_resolver.cpp src/glue/file_resolver.h src/glue/config_resolver.cpp src/glue/config_resolver.h)
+target_link_libraries(Luau.LuauCeption.Analysis PUBLIC Luau.Analysis)
+target_compile_features(Luau.LuauCeption.Analysis PUBLIC cxx_std_17)
+target_compile_definitions(Luau.LuauCeption.Analysis PUBLIC LUAUCEPTION_API=${EMSCRIPTEN_EXPORT})
+target_compile_options(Luau.LuauCeption.Analysis PUBLIC ${LUAUCEPTION_CC_OPTS})
+target_link_options(Luau.LuauCeption.Analysis PUBLIC ${LUAUCEPTION_LN_OPTS})

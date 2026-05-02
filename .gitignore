@@ -2,4 +2,5 @@ build/*
 output/*
 src/luau_entrypoint/CompilerModule.luau
 src/luau_entrypoint/VMModule.luau
+src/luau_entrypoint/AnalysisModule.luau
 run.luau

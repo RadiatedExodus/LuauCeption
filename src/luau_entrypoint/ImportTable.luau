@@ -50,6 +50,14 @@ return function(module: WasmModuleType.WasmModule, helper: HelperTable)
         return 0
     end
 
+    local function _mmap_js(len: number, prot: number, flags: number, fd: number, offset: number, allocated: number, addr: number): number
+        return -52
+    end
+
+    local function _munmap_js(addr: number, len: number, prot: number, flags: number, fd: number, offset: number): number
+        return 0
+    end
+
     local function __cxa_throw(ptr: number, type: number, destructor: number): never
         local info = ExceptionInfo.new(memory, ptr)
         info:Initialize(type, destructor)
@@ -220,8 +228,10 @@ return function(module: WasmModuleType.WasmModule, helper: HelperTable)
     end
 
     return {
-        fd_flush = fd_flush,
-        fd_write = fd_write,
+        fd_flush   = fd_flush,
+        fd_write   = fd_write,
+        _mmap_js   = _mmap_js,
+        _munmap_js = _munmap_js,
 
         __cxa_throw = __cxa_throw,
         _abort_js   = _abort_js,

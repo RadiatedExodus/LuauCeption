@@ -68,6 +68,7 @@ assert(cwdCheckOk and cwdResult, `please run the builder from the root of the re
 local parserCmdLine = argparse("src/builder", "LuauCeption Builder Script")
 parserCmdLine:option("-cm --compiler-module",  "Path to Luau.LuauCeption.Compiler WebAssembly file")
 parserCmdLine:option("-vm --vm-module",        "Path to Luau.LuauCeption.VM WebAssembly file")
+parserCmdLine:option("-am --analysis-module",  "Path to Luau.LuauCeption.Analysis WebAssembly file")
 parserCmdLine:option("-vc --vector-compat",    "Controls if vector compat is enabled or not (true/false)")
 parserCmdLine:option("-of --output-folder",    "The path where the 'built' LuauCeption module will be put at")
 local args = parserCmdLine:parse(process.args)
@@ -75,6 +76,7 @@ local args = parserCmdLine:parse(process.args)
 --// constants
 local COMPILER_WASM_MODULE  = args["compiler_module"]
 local VM_WASM_MODULE        = args["vm_module"]
+local ANALYSIS_WASM_MODULE  = args["analysis_module"]
 local OUTPUT_FOLDER_PATH    = PathShouldEndInSlash(args["output_folder"])
 local LUAU_GIT_TAG          = GitGetTag("./extern/luau/")
 local LUAU_GIT_COMMIT       = GitGetCommit("./extern/luau/")
@@ -83,7 +85,7 @@ local VECTOR_COMPAT         = ReadFileConditional("./src/builder/VectorCompat.lu
 
 --// module processing
 --// put down here because they need constants
-local function ProcessModule(type: "compiler" | "vm", path: string): string
+local function ProcessModule(type: "compiler" | "vm" | "analysis", path: string): string
     local transpiledModuleStrings = {} :: {string}
     table.insert(transpiledModuleStrings, "--!nocheck")
     table.insert(transpiledModuleStrings, `--// LuauCeption - module: {type}`)
@@ -97,6 +99,7 @@ end
 --// file check
 CheckFileReadable(COMPILER_WASM_MODULE)
 CheckFileReadable(VM_WASM_MODULE)
+CheckFileReadable(ANALYSIS_WASM_MODULE)
 
 --// some logging
 print("LuauCeption Builder")
@@ -104,6 +107,7 @@ print(`  Luau version detected: {LUAU_GIT_TAG} ({LUAU_GIT_COMMIT})`)
 print(`  Vector compat enabled: {VECTOR_COMPAT_ENABLED}`)
 print(`  Compiler module path:  {COMPILER_WASM_MODULE}`)
 print(`  VM module path:        {VM_WASM_MODULE}`)
+print(`  Analysis module path:  {ANALYSIS_WASM_MODULE}`)
 print(`  Output folder path:    {OUTPUT_FOLDER_PATH}`)
 
 --// setup output folder
@@ -122,6 +126,8 @@ print("Processing compiler module")
 fs.writeFile(`{OUTPUT_FOLDER_PATH}CompilerModule.luau`, ProcessModule("compiler", COMPILER_WASM_MODULE))
 print("Processing VM module")
 fs.writeFile(`{OUTPUT_FOLDER_PATH}VMModule.luau`, ProcessModule("vm", VM_WASM_MODULE))
+print("Processing analysis module")
+fs.writeFile(`{OUTPUT_FOLDER_PATH}AnalysisModule.luau`, ProcessModule("analysis", ANALYSIS_WASM_MODULE))
 
 --// ok
 print("Build OK")

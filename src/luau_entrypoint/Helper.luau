@@ -72,6 +72,19 @@ return function(module: WasmModuleType.WasmModule)
         return
     end
 
+    local function ReadStringArray(arrayPtr: number): {string}
+        local parsed   = {} :: {string}
+        local position = 0
+        while true do
+            local strPtr = buffer.readi32(memory, arrayPtr + position)
+            if (strPtr == 0) then break end
+            local length = module.strlen(strPtr)
+            table.insert(parsed, buffer.readstring(memory, strPtr, length))
+            position += 4
+        end
+        return parsed
+    end
+
     local function ReadVectorFloatArray(arrayPtr: number): {number}
         return {
             SpiderRuntime.rt_load_f32(module.memory, arrayPtr),
@@ -108,6 +121,7 @@ end
         CreateStub             = CreateStub,
         CreateInvoke           = CreateInvoke,
         FreeStringArray        = FreeStringArray,
+        ReadStringArray        = ReadStringArray,
         ReadVectorFloatArray   = ReadVectorFloatArray,
         InjectFunction         = InjectFunction,
         GetTaskLibrary         = GetTaskLibrary,
