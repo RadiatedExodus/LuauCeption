@@ -44,15 +44,6 @@ local function CheckFileReadable(path: string)
     return
 end
 
-local function ReadFileConditional(path: string, condition: boolean): string?
-    if (not condition) then return nil end
-    local asuccess, exists = pcall(fs.isFile, path)
-    local bsuccess, readOk = pcall(fs.readFile, path)
-    assert(asuccess and exists, `file '{path}' doesn't exist`)
-    assert(bsuccess and readOk, `file '{path}' is unreadable`)
-    return readOk
-end
-
 local function PathShouldEndInSlash(path: string): string
     if (string.sub(path, #path, #path) ~= "/") then
         return `{path}/`
@@ -69,7 +60,6 @@ local parserCmdLine = argparse("src/builder", "LuauCeption Builder Script")
 parserCmdLine:option("-cm --compiler-module",  "Path to Luau.LuauCeption.Compiler WebAssembly file")
 parserCmdLine:option("-vm --vm-module",        "Path to Luau.LuauCeption.VM WebAssembly file")
 parserCmdLine:option("-am --analysis-module",  "Path to Luau.LuauCeption.Analysis WebAssembly file")
-parserCmdLine:option("-vc --vector-compat",    "Controls if vector compat is enabled or not (true/false)")
 parserCmdLine:option("-of --output-folder",    "The path where the 'built' LuauCeption module will be put at")
 local args = parserCmdLine:parse(process.args)
 
@@ -80,8 +70,6 @@ local ANALYSIS_WASM_MODULE  = args["analysis_module"]
 local OUTPUT_FOLDER_PATH    = PathShouldEndInSlash(args["output_folder"])
 local LUAU_GIT_TAG          = GitGetTag("./extern/luau/")
 local LUAU_GIT_COMMIT       = GitGetCommit("./extern/luau/")
-local VECTOR_COMPAT_ENABLED = string.lower(args["vector_compat"]) == "true"
-local VECTOR_COMPAT         = ReadFileConditional("./src/builder/VectorCompat.luau", VECTOR_COMPAT_ENABLED) or ""
 
 --// module processing
 --// put down here because they need constants
@@ -90,7 +78,7 @@ local function ProcessModule(type: "compiler" | "vm" | "analysis", path: string)
     table.insert(transpiledModuleStrings, "--!nocheck")
     table.insert(transpiledModuleStrings, `--// LuauCeption - module: {type}`)
     table.insert(transpiledModuleStrings, `--// Luau {LUAU_GIT_TAG} ({LUAU_GIT_COMMIT})`)
-    table.insert(transpiledModuleStrings, VECTOR_COMPAT)
+    table.insert(transpiledModuleStrings, "")
     table.insert(transpiledModuleStrings, RunSpider(path))
     table.insert(transpiledModuleStrings, "return module")
     return table.concat(transpiledModuleStrings, "\n")
@@ -104,7 +92,6 @@ CheckFileReadable(ANALYSIS_WASM_MODULE)
 --// some logging
 print("LuauCeption Builder")
 print(`  Luau version detected: {LUAU_GIT_TAG} ({LUAU_GIT_COMMIT})`)
-print(`  Vector compat enabled: {VECTOR_COMPAT_ENABLED}`)
 print(`  Compiler module path:  {COMPILER_WASM_MODULE}`)
 print(`  VM module path:        {VM_WASM_MODULE}`)
 print(`  Analysis module path:  {ANALYSIS_WASM_MODULE}`)
