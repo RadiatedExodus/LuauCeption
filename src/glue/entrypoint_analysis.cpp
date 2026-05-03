@@ -1,5 +1,4 @@
 #include <string>
-#include <stdio.h>
 #include "Luau/Frontend.h"
 #include "Luau/BuiltinDefinitions.h"
 #include "flags.h"
