@@ -17,11 +17,18 @@ local LuaReferenceMacro  = require("./LuauVM/LuaReferenceMacro")
 local LuauVM = {}
 LuauVM.__index = LuauVM
 
-export type Pointer         = number
-export type LuaCFunction    = (Pointer) -> (number)
-export type LuaContinuation = (Pointer, number) -> (number)
-export type LuaDestructor   = (Pointer, number) -> (number)
-export type LuaAlloc        = (Pointer, Pointer, number, number) -> (Pointer)
+--// wasm types
+export type Pointer = number
+
+--// luau types
+export type LuaCFunction       = (Pointer) -> (number)
+export type LuaContinuation    = (Pointer, number) -> (number)
+export type LuaDestructor      = (Pointer, number) -> (number)
+export type LuaAlloc           = (Pointer, Pointer, number, number) -> (Pointer)
+export type LuaHook            = (Pointer, Pointer) -> ()
+export type LuaCoverage        = (Pointer, Pointer, number, number, Pointer, number) -> ()
+export type LuaCounterFunction = (Pointer, Pointer, number) -> ()
+export type LuaCounterValue    = (Pointer, number, number, number) -> ()
 
 --// ChildStateVMs should be nil if it has a Parent
 --// Parent should be nil if it has ChildStateVMs
@@ -744,6 +751,79 @@ end
 function LuauVM.Unref(self: LuauVM, ref: number)
     self.WASM.lua_unref(self.State, ref)
     return
+end
+
+--// Debug API
+function LuauVM.StackDepth(self: LuauVM): number
+    return self.WASM.lua_stackdepth(self.State)
+end
+
+function LuauVM.GetInfo(self: LuauVM, level: number, what: string, ar: Pointer): boolean
+    local whatPtr = self.Helper.CreateString(what)
+    local result  = self.WASM.lua_getinfo(self.State, level, whatPtr, ar)
+    self.WASM.free(whatPtr)
+    return (result == 1)
+end
+
+function LuauVM.GetArgument(self: LuauVM, level: number, n: number): boolean
+    return (self.WASM.lua_getargument(self.State, level, n) == 1)
+end
+
+function LuauVM.GetLocal(self: LuauVM, level: number, n: number): string
+    local result = self.WASM.lua_getlocal(self.State, level, n)
+    local length = self.WASM.strlen(result)
+    return buffer.readstring(self.Memory, result, length)
+end
+
+function LuauVM.SetLocal(self: LuauVM, level: number, n: number): string
+    local result = self.WASM.lua_setlocal(self.State, level, n)
+    local length = self.WASM.strlen(result)
+    return buffer.readstring(self.Memory, result, length)
+end
+
+function LuauVM.GetUpvalue(self: LuauVM, funcIndex: number, n: number): string
+    local result = self.WASM.lua_getupvalue(self.State, funcIndex, n)
+    local length = self.WASM.strlen(result)
+    return buffer.readstring(self.Memory, result, length)
+end
+
+function LuauVM.SetUpvalue(self: LuauVM, funcIndex: number, n: number): string
+    local result = self.WASM.lua_setupvalue(self.State, funcIndex, n)
+    local length = self.WASM.strlen(result)
+    return buffer.readstring(self.Memory, result, length)
+end
+
+function LuauVM.SingleStep(self: LuauVM, enabled: boolean)
+    self.WASM.lua_singlestep(self.State, if (enabled) then 1 else 0)
+    return
+end
+
+function LuauVM.Breakpoint(self: LuauVM, funcIndex: number, line: number, enabled: boolean): number
+    return self.WASM.lua_breakpoint(self.State, funcIndex, line, if (enabled) then 1 else 0)
+end
+
+function LuauVM.GetCoverage(self: LuauVM, funcIndex: number, context: Pointer, callback: LuaCoverage | number)
+    local callbackIdx = if (typeof(callback) == "number") then callback else self.Helper.InjectFunction(callback)
+    self.WASM.lua_getcoverage(self.State, funcIndex, context, callbackIdx)
+    return
+end
+
+function LuauVM.GetCounters(self: LuauVM, funcIndex: number, context: Pointer, functionVisit: LuaCounterFunction | number, valueVisit: LuaCounterValue | number)
+    local fvIdx = if (typeof(functionVisit) == "number") then functionVisit else self.Helper.InjectFunction(functionVisit)
+    local vvIdx = if (typeof(valueVisit) == "number")    then valueVisit    else self.Helper.InjectFunction(valueVisit)
+    self.WASM.lua_getcounters(self.State, funcIndex, context, fvIdx, vvIdx)
+    return
+end
+
+function LuauVM.DebugTrace(self: LuauVM): string
+    local result = self.WASM.lua_debugtrace(self.State)
+    local length = self.WASM.strlen(result)
+    return buffer.readstring(self.Memory, result, length)
+end
+
+--// Callbacks
+function LuauVM.Callbacks(self: LuauVM): Pointer
+    return self.WASM.lua_callbacks(self.State)
 end
 
 --// Macros
