@@ -2,6 +2,7 @@
 local WasmModule      = require("./Support/WasmModuleType")
 local HelperInit      = require("./Support/Helper")
 local ImportTableInit = require("./Support/ImportTable")
+local IFTHelper       = require("./Support/IFTHelper")
 local SpiderRuntime   = require("./Support/SpiderRuntime")
 
 --// enums
@@ -21,11 +22,11 @@ LuauVM.__index = LuauVM
 export type Pointer = number
 
 --// luau types
-export type LuaCFunction       = (Pointer) -> (number)
-export type LuaContinuation    = (Pointer, number) -> (number)
-export type LuaDestructor      = (Pointer, number) -> (number)
+export type LuaCFunction       = (LuauVM) -> (number)
+export type LuaContinuation    = (LuauVM, number) -> (number)
+export type LuaDestructor      = (LuauVM, number) -> (number)
 export type LuaAlloc           = (Pointer, Pointer, number, number) -> (Pointer)
-export type LuaHook            = (Pointer, Pointer) -> ()
+export type LuaHook            = (LuauVM, Pointer) -> ()
 export type LuaCoverage        = (Pointer, Pointer, number, number, Pointer, number) -> ()
 export type LuaCounterFunction = (Pointer, Pointer, number) -> ()
 export type LuaCounterValue    = (Pointer, number, number, number) -> ()
@@ -33,13 +34,14 @@ export type LuaCounterValue    = (Pointer, number, number, number) -> ()
 --// ChildStateVMs should be nil if it has a Parent
 --// Parent should be nil if it has ChildStateVMs
 export type LuauVM = typeof(setmetatable({} :: {
-    WASM:          WasmModule.WasmModule,
-    Memory:        buffer,
-    ImportTable:   {[string]: (...any) -> (...any)},
-    Helper:        typeof(HelperInit(nil :: any)),
-    State:         number,
-    ChildStateVMs: { LuauVM }?,
-    Parent:        LuauVM?,
+    WASM:              WasmModule.WasmModule,
+    Memory:            buffer,
+    ImportTable:       {[string]: (...any) -> (...any)},
+    Helper:            typeof(HelperInit(nil :: any)),
+    IndirectFunctions: IFTHelper.IFTHelper,
+    State:             number,
+    ChildStateVMs:     { LuauVM }?,
+    Parent:            LuauVM?,
 }, LuauVM))
 
 --// LuauCeption - State manipulation additions
@@ -85,12 +87,13 @@ function LuauVM.NewThread(self: LuauVM): LuauVM
     assert(mainVM.ChildStateVMs, `BUG: newthread - mainVM does not have ChildStateVMs`)
 
     local new   = setmetatable({
-        WASM        = self.WASM,
-        Memory      = self.Memory,
-        ImportTable = self.ImportTable,
-        Helper      = self.Helper,
-        State       = state,
-        Parent      = mainVM,
+        WASM              = self.WASM,
+        Memory            = self.Memory,
+        ImportTable       = self.ImportTable,
+        Helper            = self.Helper,
+        IndirectFunctions = self.IndirectFunctions,
+        State             = state,
+        Parent            = mainVM,
     }, LuauVM)
     table.insert(mainVM.ChildStateVMs, new)
 
@@ -298,8 +301,8 @@ function LuauVM.ObjLen(self: LuauVM, idx: number): number
     return self.WASM.lua_objlen(self.State, idx)
 end
 
-function LuauVM.ToCFunction(self: LuauVM, idx: number): LuaCFunction
-    return self.WASM.__indirect_function_table[self.WASM.lua_tocfunction(self.State, idx)]
+function LuauVM.ToCFunction(self: LuauVM, idx: number): LuaCFunction?
+    return self.IndirectFunctions:GetFunctionFromIndex(self.WASM.lua_tocfunction(self.State, idx)) :: LuaCFunction?
 end
 
 function LuauVM.ToLightUserdata(self: LuauVM, idx: number): Pointer
@@ -348,12 +351,13 @@ function LuauVM.ToThread(self: LuauVM, idx: number): LuauVM
     else --// assume theres no LuauVM yet so make a new one
         local parentVM: LuauVM = (if (self.ChildStateVMs) then self else self.Parent) :: any
         foundVM = setmetatable({
-            WASM        = self.WASM,
-            Memory      = self.Memory,
-            ImportTable = self.ImportTable,
-            Helper      = self.Helper,
-            State       = statePtr,
-            Parent      = parentVM,
+            WASM              = self.WASM,
+            Memory            = self.Memory,
+            ImportTable       = self.ImportTable,
+            Helper            = self.Helper,
+            IndirectFunctions = self.IndirectFunctions,
+            State             = statePtr,
+            Parent            = parentVM,
         }, LuauVM)
         table.insert(parentVM.ChildStateVMs :: { LuauVM }, foundVM)
     end
@@ -432,9 +436,9 @@ function LuauVM.PushFStringL(self: LuauVM, fmt: string, ...): string
     return buffer.readstring(self.Memory, result, length)
 end
 
-function LuauVM.PushCClosureK(self: LuauVM, fn: LuaCFunction, debugName: string, nup: number, cont: LuaContinuation | number)
-    local fnIdx = self.Helper.InjectFunction(fn)
-    local ctIdx = if (typeof(cont) == "number") then cont else self.Helper.InjectFunction(cont)
+function LuauVM.PushCClosureK(self: LuauVM, fn: LuaCFunction | number, debugName: string, nup: number, cont: LuaContinuation | number)
+    local fnIdx = if (typeof(fn) == "number")   then fn   else self.IndirectFunctions:GetOrInsertWrappedFunction(function() return fn(self) end, fn)
+    local ctIdx = if (typeof(cont) == "number") then cont else self.IndirectFunctions:GetOrInsertWrappedFunction(function(_, status) return cont(self, status) end, cont)
     local dnPtr = self.Helper.CreateString(debugName)
     self.WASM.lua_pushcclosurek(self.State, fnIdx, dnPtr, nup, ctIdx)
     self.WASM.free(dnPtr)
@@ -465,8 +469,8 @@ function LuauVM.NewUserdataTaggedWithMetatable(self: LuauVM, sz: number, tag: nu
     return result
 end
 
-function LuauVM.NewUserdataWithDestructor(self: LuauVM, sz: number, dtor: (number) -> ()): Pointer
-    local dtorIdx = self.Helper.InjectFunction(dtor)
+function LuauVM.NewUserdataWithDestructor(self: LuauVM, sz: number, dtor: (Pointer) -> ()): Pointer
+    local dtorIdx = self.IndirectFunctions:GetOrInsertFunction(dtor)
     local result = self.WASM.lua_newuserdatadtor(self.State, sz, dtorIdx)
     return result
 end
@@ -601,7 +605,7 @@ function LuauVM.ProtectedCall(self: LuauVM, nArgs: number?, nResults: number?, e
 end
 
 function LuauVM.CProtectedCall(self: LuauVM, func: LuaCFunction | number, ud: Pointer?): LuaStatus.LuaStatus
-    return self.WASM.lua_cpcall(self.State, if (typeof(func) == "number") then func else self.Helper.InjectFunction(func), ud or 0)
+    return self.WASM.lua_cpcall(self.State, if (typeof(func) == "number") then func else self.IndirectFunctions:GetOrInsertWrappedFunction(function() return func(self) end, func), ud or 0)
 end
 
 --// Coroutine functions
@@ -690,14 +694,13 @@ function LuauVM.SetUserdataTag(self: LuauVM, idx: number, tag: number)
 end
 
 function LuauVM.SetUserdataDestructor(self: LuauVM, tag: number, dtor: LuaDestructor | number)
-    local dtIdx = if (typeof(dtor) == "number") then dtor else self.Helper.InjectFunction(dtor)
+    local dtIdx = if (typeof(dtor) == "number") then dtor else self.IndirectFunctions:GetOrInsertWrappedFunction(function(_, ptr) return dtor(self, ptr) end, dtor)
     self.WASM.lua_setuserdatadtor(self.State, tag, dtIdx)
     return
 end
 
-function LuauVM.GetUserdataDestructor(self: LuauVM, tag: number): LuaDestructor
-    local dtIdx = self.WASM.lua_getuserdatadtor(self.State, tag)
-    return self.WASM.__indirect_function_table[dtIdx] :: LuaDestructor
+function LuauVM.GetUserdataDestructor(self: LuauVM, tag: number): LuaDestructor?
+    return self.IndirectFunctions:GetFunctionFromIndex(self.WASM.lua_getuserdatadtor(self.State, tag)) :: LuaDestructor?
 end
 
 function LuauVM.SetUserdataMetatable(self: LuauVM, tag: number)
@@ -803,14 +806,14 @@ function LuauVM.Breakpoint(self: LuauVM, funcIndex: number, line: number, enable
 end
 
 function LuauVM.GetCoverage(self: LuauVM, funcIndex: number, context: Pointer, callback: LuaCoverage | number)
-    local callbackIdx = if (typeof(callback) == "number") then callback else self.Helper.InjectFunction(callback)
+    local callbackIdx = if (typeof(callback) == "number") then callback else self.IndirectFunctions:GetOrInsertFunction(callback)
     self.WASM.lua_getcoverage(self.State, funcIndex, context, callbackIdx)
     return
 end
 
 function LuauVM.GetCounters(self: LuauVM, funcIndex: number, context: Pointer, functionVisit: LuaCounterFunction | number, valueVisit: LuaCounterValue | number)
-    local fvIdx = if (typeof(functionVisit) == "number") then functionVisit else self.Helper.InjectFunction(functionVisit)
-    local vvIdx = if (typeof(valueVisit) == "number")    then valueVisit    else self.Helper.InjectFunction(valueVisit)
+    local fvIdx = if (typeof(functionVisit) == "number") then functionVisit else self.IndirectFunctions:GetOrInsertFunction(functionVisit)
+    local vvIdx = if (typeof(valueVisit) == "number")    then valueVisit    else self.IndirectFunctions:GetOrInsertFunction(valueVisit)
     self.WASM.lua_getcounters(self.State, funcIndex, context, fvIdx, vvIdx)
     return
 end
@@ -962,7 +965,7 @@ end
 function LuauVM.LRegister(self: LuauVM, libName: string, regName: string, regFunc: LuaCFunction | number)
     local libNamePtr = self.Helper.CreateString(libName)
     local regNamePtr = self.Helper.CreateString(regName)
-    local regFuncIdx = if (typeof(regFunc) == "number") then regFunc else self.Helper.InjectFunction(regFunc)
+    local regFuncIdx = if (typeof(regFunc) == "number") then regFunc else self.IndirectFunctions:GetOrInsertWrappedFunction(function() return regFunc(self) end, regFunc)
 
     --// reference: struct luaL_Reg (lualib.h)
     local regPtr = self.WASM.malloc(8)
@@ -1300,51 +1303,56 @@ return {
 
         --// initialize our stuff
         local helper = HelperInit(module)
+        local ifth   = IFTHelper.new(module)
         importTable  = ImportTableInit(module, helper)
 
         --// invoke functions
         importTable["invoke_vii"] = helper.CreateInvoke()
 
         return setmetatable({
-            WASM          = module,
-            Memory        = module.memory[1],
-            ImportTable   = importTable,
-            Helper        = helper,
-            State         = module.luaL_newstate(),
-            ChildStateVMs = {},
+            WASM              = module,
+            Memory            = module.memory[1],
+            ImportTable       = importTable,
+            IndirectFunctions = ifth,
+            Helper            = helper,
+            State             = module.luaL_newstate(),
+            ChildStateVMs     = {},
         }, LuauVM)
     end,
 
-    fromExistingModule = function(module: WasmModule.WasmModule, helper: typeof(HelperInit(nil :: any)), importTable: { [string]: (...any) -> (...any) }): LuauVM
+    fromExistingModule = function(module: WasmModule.WasmModule, helper: typeof(HelperInit(nil :: any)), importTable: { [string]: (...any) -> (...any) }, ifth: IFTHelper.IFTHelper): LuauVM
         return setmetatable({
-            WASM          = module,
-            Memory        = module.memory[1],
-            ImportTable   = importTable,
-            Helper        = helper,
-            State         = module.luaL_newstate(),
-            ChildStateVMs = {},
+            WASM              = module,
+            Memory            = module.memory[1],
+            ImportTable       = importTable,
+            Helper            = helper,
+            IndirectFunctions = ifth,
+            State             = module.luaL_newstate(),
+            ChildStateVMs     = {},
         }, LuauVM)
     end,
 
-    fromExistingMainState = function(module: WasmModule.WasmModule, helper: typeof(HelperInit(nil :: any)), importTable: { [string]: (...any) -> (...any) }, statePtr: number): LuauVM
+    fromExistingMainState = function(module: WasmModule.WasmModule, helper: typeof(HelperInit(nil :: any)), importTable: { [string]: (...any) -> (...any) }, ifth: IFTHelper.IFTHelper, statePtr: number): LuauVM
         return setmetatable({
-            WASM          = module,
-            Memory        = module.memory[1],
-            ImportTable   = importTable,
-            Helper        = helper,
-            State         = statePtr,
-            ChildStateVMs = {},
+            WASM              = module,
+            Memory            = module.memory[1],
+            ImportTable       = importTable,
+            Helper            = helper,
+            IndirectFunctions = ifth,
+            State             = statePtr,
+            ChildStateVMs     = {},
         }, LuauVM)
     end,
 
-    fromExistingChildState = function(module: WasmModule.WasmModule, helper: typeof(HelperInit(nil :: any)), importTable: { [string]: (...any) -> (...any) }, statePtr: number, parent: LuauVM): LuauVM
+    fromExistingChildState = function(module: WasmModule.WasmModule, helper: typeof(HelperInit(nil :: any)), importTable: { [string]: (...any) -> (...any) }, ifth: IFTHelper.IFTHelper, statePtr: number, parent: LuauVM): LuauVM
         local vm = setmetatable({
-            WASM          = module,
-            Memory        = module.memory[1],
-            ImportTable   = importTable,
-            Helper        = helper,
-            State         = statePtr,
-            Parent        = parent
+            WASM              = module,
+            Memory            = module.memory[1],
+            ImportTable       = importTable,
+            Helper            = helper,
+            IndirectFunctions = ifth,
+            State             = statePtr,
+            Parent            = parent
         }, LuauVM)
         table.insert(parent.ChildStateVMs :: { LuauVM }, vm)
         return vm

@@ -93,12 +93,6 @@ return function(module: WasmModuleType.WasmModule)
         }
     end
 
-    local function InjectFunction(f: (...any) -> (...any)): number
-        local ptr = #ift + 1
-        ift[ptr] = f
-        return ptr
-    end
-
     local function GetTaskLibrary(): typeof(require("@lune/task"))?
         if (task) then return task end
         local ok, res = pcall(require, "@lune/task")
@@ -123,7 +117,6 @@ end
         FreeStringArray        = FreeStringArray,
         ReadStringArray        = ReadStringArray,
         ReadVectorFloatArray   = ReadVectorFloatArray,
-        InjectFunction         = InjectFunction,
         GetTaskLibrary         = GetTaskLibrary,
         ExtractZone            = ExtractZone,
         LJMPThrowObject        = ljmp_sign,
