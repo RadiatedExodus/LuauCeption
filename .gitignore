@@ -1,3 +1,5 @@
 build/*
 output/*
-utils/wasm2luau
+src/luau_entrypoint/Modules/*
+*.rbxm
+run.luau

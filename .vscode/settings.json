@@ -78,6 +78,11 @@
         "src/tests/frktest/**",
         "build/**",
         "utils/**",
-        "snippets/**"
+        "snippets/**",
+        "extern/luau/**"
+    ],
+    "luau-lsp.completion.imports.ignoreGlobs": [
+        "**/_Index/**",
+        "extern/luau/**"
     ],
 }

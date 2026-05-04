@@ -1,65 +1,52 @@
-cmake_minimum_required(VERSION 3.19)
+cmake_minimum_required(VERSION 3.10)
 project(Luau.LuauCeption LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 
-# Import Luau
+# luau configuration
 option(LUAU_BUILD_CLI "Build CLI" OFF)
 option(LUAU_BUILD_TESTS "Build tests" OFF)
 option(LUAU_BUILD_WEB "Build Web module" OFF)
 option(LUAU_WERROR "Warnings as errors" OFF)
 option(LUAU_STATIC_CRT "Link with the static CRT (/MT)" OFF)
-option(LUAU_EXTERN_C "Use extern C for all APIs" OFF)
-add_subdirectory(luau)
+option(LUAU_EXTERN_C "Use extern C for all APIs" OFF) # we need to handle it ourselves
+option(LUAU_BUILD_SHARED "Build as a shared library" OFF)
+add_subdirectory(extern/luau)
 
-# Compiler variant compile & link options
-set(COMPILER_CC_OPTS)
-list(APPEND COMPILER_CC_OPTS -Oz -flto)
-set(COMPILER_LN_OPTS)
-list(APPEND COMPILER_LN_OPTS -Oz -flto -sEVAL_CTORS=2 -sEXPORTED_FUNCTIONS=['_strlen','_malloc','_free'] -sBINARYEN_EXTRA_PASSES='vacuum,simplify-locals,simplify-globals,optimize-instructions,optimize-stack-ir,fast-math,strip-dwarf,code-folding,duplicate-function-elimination,duplicate-import-elimination,rse,type-ssa')
+# luau processor configuration
+set(EMSCRIPTEN_EXPORT "extern \"C\" __attribute__((used))")
+target_compile_definitions(Luau.Compiler PUBLIC LUA_USE_LONGJMP=1 LUA_VECTOR_SIZE=3 LUACODE_API=${EMSCRIPTEN_EXPORT} LUACODEGEN_API=${EMSCRIPTEN_EXPORT})
+target_compile_definitions(Luau.VM PUBLIC LUA_USE_LONGJMP=1 LUA_VECTOR_SIZE=3 LUA_API=${EMSCRIPTEN_EXPORT})
+target_compile_definitions(Luau.Analysis PUBLIC LUA_USE_LONGJMP=1 LUA_VECTOR_SIZE=3)
 
-# VM variant compile & link options
-set(VM_CC_OPTS)
-list(APPEND VM_CC_OPTS -Oz -flto)
-set(VM_LN_OPTS)
-list(APPEND VM_LN_OPTS -Oz -flto -sEVAL_CTORS=2 -sEXPORTED_FUNCTIONS=['_strlen','_malloc','_free'] -sBINARYEN_EXTRA_PASSES='vacuum,simplify-locals,simplify-globals,optimize-instructions,optimize-stack-ir,fast-math,strip-dwarf,code-folding,duplicate-function-elimination,duplicate-import-elimination,rse,type-ssa')
+# compiler and linker flags
+set(LUAUCEPTION_CC_OPTS)
+set(LUAUCEPTION_LN_OPTS)
+list(APPEND LUAUCEPTION_CC_OPTS -Oz -flto)
+list(APPEND LUAUCEPTION_LN_OPTS -Oz -flto -sINITIAL_MEMORY=67108864 -sEVAL_CTORS=2 -sEXPORTED_FUNCTIONS=['_strlen','_malloc','_free'] -sBINARYEN_EXTRA_PASSES='vacuum,simplify-locals,simplify-globals,optimize-instructions,optimize-stack-ir,fast-math,strip-dwarf,code-folding,duplicate-function-elimination,duplicate-import-elimination,rse,type-ssa')
 
-# Full variant compile & link options
-set(FULL_CC_OPTS)
-list(APPEND FULL_CC_OPTS -Oz -flto)
-set(FULL_LN_OPTS)
-list(APPEND FULL_LN_OPTS -Oz -flto -sEVAL_CTORS=2 -sEXPORTED_FUNCTIONS=['_strlen','_malloc','_free'] -sBINARYEN_EXTRA_PASSES='vacuum,simplify-locals,simplify-globals,optimize-instructions,optimize-stack-ir,fast-math,strip-dwarf,code-folding,duplicate-function-elimination,duplicate-import-elimination,rse,type-ssa')
-
-# Compiler variant
+# compiler
 add_executable(Luau.LuauCeption.Compiler)
-target_sources(Luau.LuauCeption.Compiler PRIVATE src/Compiler.cpp src/LuauCeptionFlags.cpp src/LuauCeptionFlags.h)
+target_sources(Luau.LuauCeption.Compiler PRIVATE src/glue/entrypoint_compiler.cpp src/glue/flags.cpp src/glue/flags.h)
 target_link_libraries(Luau.LuauCeption.Compiler PUBLIC Luau.Compiler)
-
-# VM variant
-add_executable(Luau.LuauCeption.VM)
-target_sources(Luau.LuauCeption.VM PRIVATE src/VM.cpp src/LuauCeptionFlags.cpp src/LuauCeptionFlags.h)
-target_link_libraries(Luau.LuauCeption.VM PUBLIC Luau.VM)
-
-# Full variant
-add_executable(Luau.LuauCeption.Full)
-target_sources(Luau.LuauCeption.Full PRIVATE src/Full.cpp src/LuauCeptionFlags.cpp src/LuauCeptionFlags.h)
-target_link_libraries(Luau.LuauCeption.Full PUBLIC Luau.Compiler Luau.VM)
-
-# Compiler variant configuration
 target_compile_features(Luau.LuauCeption.Compiler PUBLIC cxx_std_17)
-target_compile_options(Luau.LuauCeption.Compiler PUBLIC ${COMPILER_CC_OPTS})
-target_link_options(Luau.LuauCeption.Compiler PUBLIC ${COMPILER_LN_OPTS})
+target_compile_definitions(Luau.LuauCeption.Compiler PUBLIC LUAUCEPTION_API=${EMSCRIPTEN_EXPORT})
+target_compile_options(Luau.LuauCeption.Compiler PUBLIC ${LUAUCEPTION_CC_OPTS})
+target_link_options(Luau.LuauCeption.Compiler PUBLIC ${LUAUCEPTION_LN_OPTS})
 
-# VM variant configuration
+# vm
+add_executable(Luau.LuauCeption.VM)
+target_sources(Luau.LuauCeption.VM PRIVATE src/glue/entrypoint_vm.cpp src/glue/flags.cpp src/glue/flags.h)
+target_link_libraries(Luau.LuauCeption.VM PUBLIC Luau.Compiler Luau.VM)
 target_compile_features(Luau.LuauCeption.VM PUBLIC cxx_std_17)
-target_compile_options(Luau.LuauCeption.VM PUBLIC ${VM_CC_OPTS})
-target_link_options(Luau.LuauCeption.VM PUBLIC ${VM_LN_OPTS})
+target_compile_definitions(Luau.LuauCeption.VM PUBLIC LUAUCEPTION_API=${EMSCRIPTEN_EXPORT})
+target_compile_options(Luau.LuauCeption.VM PUBLIC ${LUAUCEPTION_CC_OPTS})
+target_link_options(Luau.LuauCeption.VM PUBLIC ${LUAUCEPTION_LN_OPTS})
 
-# Full variant configuration
-target_compile_features(Luau.LuauCeption.Full PUBLIC cxx_std_17)
-target_compile_options(Luau.LuauCeption.Full PUBLIC ${FULL_CC_OPTS})
-target_link_options(Luau.LuauCeption.Full PUBLIC ${FULL_LN_OPTS})
-
-# Definition to make Lua C APIs dynamically exported | __attribute__((used)) = EMSCRIPTEN_KEEPALIVE
-set(EXPORTED_EXTERN "extern \"C\" __attribute__((used))")
-target_compile_definitions(Luau.Compiler PUBLIC LUACODE_API=${EXPORTED_EXTERN})
-target_compile_definitions(Luau.VM PUBLIC LUA_USE_LONGJMP=1 LUA_API=${EXPORTED_EXTERN})
+# analysis
+add_executable(Luau.LuauCeption.Analysis)
+target_sources(Luau.LuauCeption.Analysis PRIVATE src/glue/entrypoint_analysis.cpp src/glue/flags.cpp src/glue/flags.h src/glue/file_resolver.cpp src/glue/file_resolver.h src/glue/config_resolver.cpp src/glue/config_resolver.h)
+target_link_libraries(Luau.LuauCeption.Analysis PUBLIC Luau.Analysis)
+target_compile_features(Luau.LuauCeption.Analysis PUBLIC cxx_std_17)
+target_compile_definitions(Luau.LuauCeption.Analysis PUBLIC LUAUCEPTION_API=${EMSCRIPTEN_EXPORT})
+target_compile_options(Luau.LuauCeption.Analysis PUBLIC ${LUAUCEPTION_CC_OPTS})
+target_link_options(Luau.LuauCeption.Analysis PUBLIC ${LUAUCEPTION_LN_OPTS})
