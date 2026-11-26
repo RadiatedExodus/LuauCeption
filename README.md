@@ -19,3 +19,7 @@ The old testing script (``Test.luau``) at ``utils/_helpers`` is still available,
 - [@Rerumu](https://github.com/Rerumu) - a LOT of troubleshooting
 - Tryptamine (@Lemonchat) - C exception handling
 - gamerer123 (@Lemonchat) - pointing out a oversight in the V3 implementation (that broke number precision)
+
+## Legal
+Luau is a trademark of Roblox Corporation.
+This project is not affiliated with or endorsed by Roblox or the Luau team.
